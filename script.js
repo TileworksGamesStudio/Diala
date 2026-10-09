@@ -1,14 +1,13 @@
 /**
  * PERSONAL DIALER & CLIENT CONTACT MANAGEMENT
- * Pure Vanilla JavaScript implementation with IndexedDB persistence,
- * Progressive Web App capabilities, Bento Grid architecture,
- * O(n) Duplicate Resolution, and DocumentFragment DOM rendering.
+ * Compact Mobile & Hardware Keypad (CAT S22 Flip / D-Pad) Engine
+ * British Racing Green & Gold Edition
  */
 
 (() => {
   'use strict';
 
-  // --- 1. Database & Persistence Layer (IndexedDB) with Full Error Handling ---
+  // --- 1. Database & Persistence Layer (IndexedDB) ---
   const DB_NAME = 'PersonalDialerDB';
   const DB_VERSION = 1;
   let dbInstance = null;
@@ -56,7 +55,7 @@
     return dbInstance.transaction(storeName, mode).objectStore(storeName);
   }
 
-  // --- 2. Application State & Gamification Variables ---
+  // --- 2. State & Defaults ---
   const state = {
     contacts: [],
     filteredContacts: [],
@@ -67,14 +66,15 @@
     pendingCallContact: null,
     emailDraftContext: null,
     parsedImportData: null,
+    activeScreenId: 'screenContacts',
     settings: {
       templateSubject: 'Following up regarding our conversation',
-      templateBody: 'Hi {first_name},\n\nThank you for taking my call today. As discussed, I wanted to follow up with our details.\n\nBest regards,\n[Your Name]',
+      templateBody: 'Hi {first_name},\n\nThank you for speaking today. As discussed, following up with details.\n\nBest regards,\n[Your Name]',
       dailyTargetCalls: 10
     }
   };
 
-  // --- 3. Robust RFC 4180 CSV Engine ---
+  // --- 3. RFC 4180 CSV Engine ---
   function parseCSV(text) {
     if (text.charCodeAt(0) === 0xFEFF) {
       text = text.slice(1);
@@ -143,8 +143,8 @@
       phone: ['phone', 'telephone', 'mobile', 'cell', 'phone_number'],
       email: ['email', 'email_address'],
       country: ['country', 'nation'],
-      city: ['city', 'town', 'municipality'],
-      street_address: ['street_address', 'address', 'street', 'address_line_1'],
+      city: ['city', 'town'],
+      street_address: ['street_address', 'address', 'street'],
       postal_code: ['postal_code', 'zip', 'zip_code', 'postcode'],
       company: ['company', 'organisation', 'business', 'org'],
       job_title: ['job_title', 'title', 'role'],
@@ -192,7 +192,7 @@
     return contacts;
   }
 
-  // --- 4. Normalisation & Formatting Helpers ---
+  // --- 4. Formatters & Helpers ---
   function normalisePhoneForDial(phoneStr) {
     if (!phoneStr) return '';
     const hasPlus = phoneStr.trim().startsWith('+');
@@ -218,7 +218,7 @@
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
-  // --- 5. Data Access Layer with Comprehensive Error Handling ---
+  // --- 5. Data Access Layer ---
   async function loadAllContacts() {
     return new Promise((resolve, reject) => {
       try {
@@ -332,11 +332,9 @@
     });
   }
 
-  // --- 6. Gamification & Outreach Target Computation ---
+  // --- 6. Metric Computation & Gamification ---
   async function updateGamifiedMetrics() {
     const total = state.contacts.length;
-    const uncontacted = state.contacts.filter(c => c.status === 'uncontacted').length;
-    
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -349,23 +347,21 @@
     const allLogs = await getAllInteractions();
     const callsTotal = allLogs.filter(l => l.type === 'call').length;
 
-    // Calculate calls made today
     const callsToday = allLogs.filter(l => {
       return l.type === 'call' && l.timestamp.slice(0, 10) === todayStr;
     }).length;
 
-    // Calculate Streak
+    // Streak count
     const distinctCallDays = new Set(
       allLogs
         .filter(l => l.type === 'call')
-        .map(l => new Date(l.timestamp).toLocaleDateString('en-CA')) // YYYY-MM-DD
+        .map(l => new Date(l.timestamp).toLocaleDateString('en-CA'))
     );
 
     let streak = 0;
     let checkDate = new Date();
     const checkDateStr = checkDate.toLocaleDateString('en-CA');
 
-    // If calls made today, start counting back from today; otherwise from yesterday
     if (distinctCallDays.has(checkDateStr)) {
       while (distinctCallDays.has(checkDate.toLocaleDateString('en-CA'))) {
         streak++;
@@ -379,28 +375,20 @@
       }
     }
 
-    // Update Streak Badge
-    document.getElementById('streakCountText').textContent = `${streak}d Streak`;
+    document.getElementById('streakCountText').textContent = `${streak}d`;
 
-    // Update Daily Target Progress Ring
+    // Progress Ring (radius = 13, circumference ~ 81.68)
     const goal = state.settings.dailyTargetCalls || 10;
     const pct = Math.min(100, Math.round((callsToday / goal) * 100));
     
     const ringCircle = document.getElementById('targetProgressCircle');
-    const circumference = 2 * Math.PI * 18; // ~113.1px
+    const circumference = 2 * Math.PI * 13;
     const offset = circumference - (pct / 100) * circumference;
     ringCircle.style.strokeDashoffset = offset;
-    
-    if (pct >= 100) {
-      ringCircle.style.stroke = 'var(--color-success)';
-    } else {
-      ringCircle.style.stroke = 'var(--color-primary)';
-    }
 
     document.getElementById('targetPercentLabel').textContent = `${pct}%`;
-    document.getElementById('targetSubtext').textContent = `${callsToday} / ${goal} calls`;
 
-    // Queue Clearance Vault Banner
+    // Queue Clearance Banner
     const clearBanner = document.getElementById('queueClearBanner');
     if (dueToday === 0 && total > 0) {
       clearBanner.classList.remove('hidden');
@@ -408,14 +396,12 @@
       clearBanner.classList.add('hidden');
     }
 
-    // Set Text Metric Counters
     document.getElementById('metricTotal').querySelector('.metric-val').textContent = total;
-    document.getElementById('metricUncontacted').querySelector('.metric-val').textContent = uncontacted;
     document.getElementById('metricDue').querySelector('.metric-val').textContent = dueToday;
     document.getElementById('metricCalls').querySelector('.metric-val').textContent = callsTotal;
   }
 
-  // --- 7. Fast, XSS-Free List Rendering (DocumentFragment & HTML Templates) ---
+  // --- 7. List Filtering & Rendering ---
   function applyFiltersAndRender() {
     const query = state.searchQuery.toLowerCase().trim();
     const queue = state.activeQueue;
@@ -464,8 +450,8 @@
     if (state.filteredContacts.length === 0) {
       listContainer.innerHTML = `
         <div class="empty-state">
-          <p>No contacts found matching current criteria.</p>
-          <button id="btnEmptyImportTrigger" class="btn btn-secondary">Import CSV</button>
+          <p>No contacts found.</p>
+          <button id="btnEmptyImportTrigger" class="btn btn-gold btn-sm">Import CSV</button>
         </div>`;
       const btn = document.getElementById('btnEmptyImportTrigger');
       if (btn) btn.onclick = () => document.getElementById('fileCsvInput').click();
@@ -475,36 +461,33 @@
     const template = document.getElementById('tmpl-contact-card');
     const fragment = document.createDocumentFragment();
 
-    state.filteredContacts.forEach(contact => {
+    state.filteredContacts.forEach((contact, idx) => {
       const clone = template.content.cloneNode(true);
       const card = clone.querySelector('.contact-card');
       card.dataset.id = contact.id;
+      card.dataset.index = idx;
 
       card.querySelector('.contact-name').textContent = contact.name;
       
       const metaParts = [];
       if (contact.company) metaParts.push(contact.company);
-      if (contact.city || contact.country) metaParts.push(contact.city || contact.country);
       else if (contact.phone) metaParts.push(contact.phone);
-      card.querySelector('.contact-meta').textContent = metaParts.join(' • ');
+      card.querySelector('.contact-meta').textContent = metaParts.join(' • ') || 'No company';
 
       const badge = card.querySelector('.badge');
       if (contact.status === 'do_not_contact') {
         badge.className = 'badge badge-dnc';
-        badge.textContent = 'Do Not Contact';
+        badge.textContent = 'DNC';
       } else if (contact.next_follow_up_at && new Date(contact.next_follow_up_at) <= new Date()) {
         badge.className = 'badge badge-due';
         badge.textContent = 'Due';
       } else if (contact.last_contacted_at) {
         badge.className = 'badge badge-contacted';
-        badge.textContent = 'Contacted';
+        badge.textContent = 'Done';
       } else {
         badge.className = 'badge badge-new';
         badge.textContent = 'New';
       }
-
-      const dateLbl = card.querySelector('.contact-date-lbl');
-      dateLbl.textContent = contact.last_contacted_at ? formatDate(contact.last_contacted_at) : 'Uncontacted';
 
       card.addEventListener('click', () => openContactProfile(contact.id));
       fragment.appendChild(clone);
@@ -513,7 +496,7 @@
     listContainer.replaceChildren(fragment);
   }
 
-  // --- 8. Bento Grid Profile Renderer ---
+  // --- 8. Profile View & Sticky Actions ---
   function openContactProfile(contactId) {
     const index = state.filteredContacts.findIndex(c => c.id === contactId);
     if (index === -1) return;
@@ -528,7 +511,7 @@
     const template = document.getElementById('tmpl-bento-profile');
     const clone = template.content.cloneNode(true);
 
-    // Hero Tile
+    // Hero
     clone.querySelector('.bento-avatar').textContent = getInitials(contact.name);
     clone.querySelector('.bento-name').textContent = contact.name;
     
@@ -539,41 +522,34 @@
 
     const statusBadge = clone.querySelector('.bento-status-badge');
     if (contact.status === 'do_not_contact') {
-      statusBadge.className = 'badge bento-status-badge badge-dnc';
-      statusBadge.textContent = 'Do Not Contact';
+      statusBadge.className = 'badge badge-dnc';
+      statusBadge.textContent = 'DNC';
     } else if (contact.next_follow_up_at && new Date(contact.next_follow_up_at) <= new Date()) {
-      statusBadge.className = 'badge bento-status-badge badge-due';
+      statusBadge.className = 'badge badge-due';
       statusBadge.textContent = 'Overdue';
     } else {
-      statusBadge.className = 'badge bento-status-badge badge-new';
+      statusBadge.className = 'badge badge-new';
       statusBadge.textContent = contact.status;
     }
 
-    // Direct Comms Tile
+    // Direct Comms
     clone.querySelector('.bento-phone-val').textContent = contact.phone || 'None registered';
     clone.querySelector('.bento-email-val').textContent = contact.email || 'None registered';
 
-    // Next Outreach Tile
+    // Outreach
     const scheduleDateText = clone.querySelector('.schedule-date-text');
     const scheduleRelativeTime = clone.querySelector('.schedule-relative-time');
     if (contact.next_follow_up_at) {
       scheduleDateText.textContent = formatDate(contact.next_follow_up_at);
       const isOverdue = new Date(contact.next_follow_up_at) < new Date();
-      scheduleRelativeTime.textContent = isOverdue ? '⚠️ Overdue' : 'Scheduled reminder';
-      if (isOverdue) scheduleDateText.style.color = 'var(--color-danger)';
+      scheduleRelativeTime.textContent = isOverdue ? '⚠️ Overdue' : 'Scheduled';
     } else {
       scheduleDateText.textContent = 'None Scheduled';
-      scheduleRelativeTime.textContent = 'Tap Log below to set';
+      scheduleRelativeTime.textContent = 'Press 3 to log';
     }
 
-    // Logistics Tile
-    const addressStr = [contact.street_address, contact.city, contact.postal_code, contact.country]
-      .filter(Boolean)
-      .join(', ');
-    clone.querySelector('.bento-address-text').textContent = addressStr || 'No physical address stored for this contact.';
-
-    // Notes Tile
-    clone.querySelector('.bento-notes-content').textContent = contact.notes || 'No notes added yet.';
+    // Notes
+    clone.querySelector('.bento-notes-content').textContent = contact.notes || 'No notes added.';
 
     // Sticky Action Dock setup
     const dialPhone = normalisePhoneForDial(contact.phone);
@@ -590,23 +566,22 @@
       callBtn.href = '#';
       callBtn.onclick = (e) => {
         e.preventDefault();
-        alert('No telephone number is available for this contact.');
+        alert('No phone number available.');
       };
       callBtn.style.opacity = '0.5';
     }
 
-    // Mount DocumentFragment
     detailsContainer.replaceChildren(clone);
 
-    // Populate Activity Timeline Tile
+    // Populate Activity Timeline
     const historyListContainer = detailsContainer.querySelector('.bento-history-list');
     const logCountLabel = detailsContainer.querySelector('.bento-log-count');
     const historyLogs = await getInteractionsForContact(contact.id);
     
-    logCountLabel.textContent = `${historyLogs.length} interaction${historyLogs.length === 1 ? '' : 's'}`;
+    logCountLabel.textContent = `${historyLogs.length}`;
 
     if (historyLogs.length === 0) {
-      historyListContainer.innerHTML = '<p style="font-size: 0.8rem; color: var(--color-text-muted); padding: 8px 0;">No recorded calls or notes yet.</p>';
+      historyListContainer.innerHTML = '<p style="font-size: 0.72rem; color: var(--text-muted); padding: 4px 0;">No logs yet.</p>';
     } else {
       const histTemplate = document.getElementById('tmpl-history-item');
       const histFragment = document.createDocumentFragment();
@@ -639,6 +614,8 @@
 
   // --- 9. Screen Navigation ---
   function switchScreen(targetScreenId) {
+    state.activeScreenId = targetScreenId;
+
     document.querySelectorAll('.screen-view').forEach(screen => {
       screen.classList.add('hidden');
       screen.classList.remove('active');
@@ -648,6 +625,7 @@
     if (activeScreen) {
       activeScreen.classList.remove('hidden');
       activeScreen.classList.add('active');
+      activeScreen.scrollTop = 0;
     }
 
     document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -669,7 +647,7 @@
       const elapsed = Date.now() - state.lastCallTimestamp;
       if (elapsed > 1500) {
         const promptBar = document.getElementById('callReturnPrompt');
-        document.getElementById('callPromptText').textContent = `Log outcome for ${state.pendingCallContact.name}?`;
+        document.getElementById('callPromptText').textContent = `Log ${state.pendingCallContact.name}?`;
         promptBar.classList.remove('hidden');
       }
     }
@@ -679,11 +657,12 @@
   function openDispositionModal(contact) {
     if (!contact) return;
     document.getElementById('dispContactId').value = contact.id;
-    document.getElementById('modalDispTitle').textContent = `Outcome: ${contact.name}`;
+    document.getElementById('modalDispTitle').textContent = `Log: ${contact.name}`;
     document.getElementById('dispOutcome').value = 'Spoke — interested';
     document.getElementById('dispNote').value = '';
     document.getElementById('dispFollowUpDate').value = '';
     document.getElementById('modalDisposition').classList.remove('hidden');
+    document.getElementById('dispOutcome').focus();
   }
 
   async function handleDispositionSave(e) {
@@ -713,7 +692,7 @@
     state.pendingCallContact = null;
 
     applyFiltersAndRender();
-    if (state.currentContactIndex !== -1 && state.filteredContacts[state.currentContactIndex].id === contact.id) {
+    if (state.currentContactIndex !== -1 && state.filteredContacts[state.currentContactIndex]?.id === contact.id) {
       renderProfileView(contact);
     }
   }
@@ -721,7 +700,7 @@
   // --- 12. Email Preparation Workflow ---
   function openEmailModal(contact) {
     if (!contact || !contact.email) {
-      alert('This contact does not have an email address.');
+      alert('No email registered.');
       return;
     }
 
@@ -744,6 +723,7 @@
     document.getElementById('emailBody').value = body;
     document.getElementById('emailConfirmNotice').classList.add('hidden');
     document.getElementById('modalEmail').classList.remove('hidden');
+    document.getElementById('btnLaunchMailto').focus();
   }
 
   function launchMailto() {
@@ -784,7 +764,6 @@
   // --- 13. Follow-Ups & History Views ---
   async function renderFollowUpsScreen() {
     const container = document.getElementById('followUpsList');
-    const now = new Date();
     const scheduled = state.contacts
       .filter(c => c.next_follow_up_at && c.status !== 'do_not_contact')
       .sort((a, b) => new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at));
@@ -803,14 +782,12 @@
       card.dataset.id = c.id;
 
       card.querySelector('.contact-name').textContent = c.name;
-      card.querySelector('.contact-meta').textContent = c.phone || c.email || 'No direct phone/email';
+      card.querySelector('.contact-meta').textContent = formatDate(c.next_follow_up_at);
       
-      const isOverdue = new Date(c.next_follow_up_at) < now;
       const badge = card.querySelector('.badge');
+      const isOverdue = new Date(c.next_follow_up_at) < new Date();
       badge.className = `badge ${isOverdue ? 'badge-due' : 'badge-contacted'}`;
-      badge.textContent = isOverdue ? 'Overdue' : 'Scheduled';
-
-      card.querySelector('.contact-date-lbl').textContent = formatDate(c.next_follow_up_at);
+      badge.textContent = isOverdue ? 'Overdue' : 'Due';
 
       card.addEventListener('click', () => openContactProfile(c.id));
       fragment.appendChild(clone);
@@ -824,7 +801,7 @@
     const logs = await getAllInteractions();
 
     if (logs.length === 0) {
-      container.innerHTML = '<div class="empty-state"><p>No call or email history logged yet.</p></div>';
+      container.innerHTML = '<div class="empty-state"><p>No interactions logged yet.</p></div>';
       return;
     }
 
@@ -832,10 +809,10 @@
     const template = document.getElementById('tmpl-history-item');
     const fragment = document.createDocumentFragment();
 
-    logs.slice(0, 60).forEach(log => {
+    logs.slice(0, 40).forEach(log => {
       const clone = template.content.cloneNode(true);
       const contact = state.contacts.find(c => c.id === log.contact_id);
-      const contactName = contact ? contact.name : 'Unknown Contact';
+      const contactName = contact ? contact.name : 'Unknown';
 
       clone.querySelector('.history-meta-badge').textContent = `${contactName} • ${log.type.toUpperCase()}`;
       clone.querySelector('.history-date').textContent = formatDate(log.timestamp);
@@ -853,7 +830,7 @@
     container.replaceChildren(fragment);
   }
 
-  // --- 14. High-Speed O(n) CSV Import with Indexed Maps ---
+  // --- 14. Import CSV with Fast O(1) Map Deduplication ---
   function handleCsvFileSelect(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -864,11 +841,10 @@
         const imported = mapCSVToContacts(rows);
 
         if (imported.length === 0) {
-          alert('Could not locate valid contact records in the chosen file.');
+          alert('No valid contacts in CSV.');
           return;
         }
 
-        // Build O(1) hash maps for deduplication
         const phoneMap = new Set();
         const emailMap = new Set();
 
@@ -893,16 +869,15 @@
         summaryBox.replaceChildren();
 
         const p1 = document.createElement('p');
-        p1.innerHTML = `Total rows parsed: <strong>${imported.length}</strong>`;
+        p1.innerHTML = `Total Rows: <strong>${imported.length}</strong>`;
         const p2 = document.createElement('p');
-        p2.innerHTML = `Detected potential duplicates: <strong>${duplicatesCount}</strong>`;
+        p2.innerHTML = `Duplicates: <strong>${duplicatesCount}</strong>`;
         summaryBox.appendChild(p1);
         summaryBox.appendChild(p2);
 
         document.getElementById('modalImportReview').classList.remove('hidden');
       } catch (err) {
-        console.error('Import error:', err);
-        alert('Failed to parse CSV file: ' + err.message);
+        alert('CSV Parse error: ' + err.message);
       }
     };
     reader.readAsText(file);
@@ -913,7 +888,6 @@
     const incoming = state.parsedImportData;
     if (!incoming) return;
 
-    // Build O(1) Lookup Maps from existing contacts
     const phoneMap = new Map();
     const emailMap = new Map();
 
@@ -961,25 +935,23 @@
     };
 
     tx.onerror = (e) => {
-      console.error('Import transaction error:', e.target.error);
-      alert('Error saving imported contacts: ' + e.target.error.message);
+      alert('Error saving import: ' + e.target.error.message);
     };
   }
 
-  // --- 15. Export & Backup Operations ---
+  // --- 15. Export & Restore ---
   function exportContactsCsv() {
     if (state.contacts.length === 0) {
-      alert('No contacts available to export.');
+      alert('No contacts to export.');
       return;
     }
 
-    const headers = ['name', 'phone', 'email', 'company', 'job_title', 'country', 'city', 'street_address', 'postal_code', 'notes', 'status', 'last_contacted_at', 'next_follow_up_at'];
+    const headers = ['name', 'phone', 'email', 'company', 'job_title', 'notes', 'status'];
     const rows = [headers.join(',')];
 
     state.contacts.forEach(c => {
-      const row = headers.map(header => {
-        let val = (c[header] || '').toString();
-        val = val.replace(/"/g, '""');
+      const row = headers.map(h => {
+        let val = (c[h] || '').toString().replace(/"/g, '""');
         return `"${val}"`;
       });
       rows.push(row.join(','));
@@ -989,7 +961,7 @@
     const url = URL.createObjectURL(csvBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `contacts_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `contacts_${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -1019,34 +991,22 @@
     reader.onload = async (e) => {
       try {
         const data = JSON.parse(e.target.result);
-        if (!data.contacts || !Array.isArray(data.contacts)) {
-          throw new Error('Invalid backup schema');
-        }
+        if (!data.contacts || !Array.isArray(data.contacts)) throw new Error('Invalid format');
 
         const tx = dbInstance.transaction(['contacts', 'interactions', 'settings'], 'readwrite');
-        const cStore = tx.objectStore('contacts');
-        const iStore = tx.objectStore('interactions');
-        const sStore = tx.objectStore('settings');
+        tx.objectStore('contacts').clear();
+        tx.objectStore('interactions').clear();
 
-        cStore.clear();
-        iStore.clear();
-
-        data.contacts.forEach(c => cStore.put(c));
-        if (data.interactions && Array.isArray(data.interactions)) {
-          data.interactions.forEach(i => iStore.put(i));
-        }
-        if (data.settings) {
-          sStore.put({ key: 'app_preferences', value: data.settings });
-        }
+        data.contacts.forEach(c => tx.objectStore('contacts').put(c));
+        if (data.interactions) data.interactions.forEach(i => tx.objectStore('interactions').put(i));
+        if (data.settings) tx.objectStore('settings').put({ key: 'app_preferences', value: data.settings });
 
         tx.oncomplete = async () => {
           await loadAllContacts();
           await loadSettings();
           applyFiltersAndRender();
-          alert('Database restored successfully.');
+          alert('Database restored.');
         };
-
-        tx.onerror = () => alert('Restore transaction failed: ' + tx.error);
       } catch (err) {
         alert('Restore failed: ' + err.message);
       }
@@ -1054,23 +1014,132 @@
     reader.readAsText(file);
   }
 
-  // --- 16. App Initialisation & PWA Registration ---
+  // --- 16. Hardware Keypad & D-Pad Keyboard Controller ---
+  function setupHardwareKeypadShortcuts() {
+    window.addEventListener('keydown', (e) => {
+      // Allow regular typing inside text fields and textareas
+      const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+      const isInputActive = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+
+      // Global Escape / Back key (CAT S22 Back key maps to Escape or Backspace)
+      if (e.key === 'Escape' || e.key === 'Backspace') {
+        const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
+        if (openModal) {
+          openModal.classList.add('hidden');
+          e.preventDefault();
+          return;
+        }
+        if (state.activeScreenId === 'screenProfile') {
+          switchScreen('screenContacts');
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (isInputActive) {
+        if (e.key === 'Enter' && activeTag === 'input' && document.activeElement.id === 'searchInput') {
+          document.activeElement.blur();
+        }
+        return;
+      }
+
+      // Keypad Shortcuts (1-9)
+      switch (e.key) {
+        case '1': // Call active contact
+          if (state.activeScreenId === 'screenProfile') {
+            const callBtn = document.getElementById('btnActionCall');
+            if (callBtn && callBtn.href && callBtn.href !== '#') {
+              callBtn.click();
+            }
+          }
+          break;
+
+        case '2': // Email active contact
+          if (state.activeScreenId === 'screenProfile') {
+            document.getElementById('btnActionEmail').click();
+          }
+          break;
+
+        case '3': // Log call outcome
+          if (!document.getElementById('callReturnPrompt').classList.contains('hidden')) {
+            document.getElementById('btnPromptLog').click();
+          } else if (state.activeScreenId === 'screenProfile') {
+            document.getElementById('btnActionDisposition').click();
+          }
+          break;
+
+        case '4': // Previous contact
+          if (state.activeScreenId === 'screenProfile') {
+            navigateProfile(-1);
+          }
+          break;
+
+        case '5': // Quick focus search bar
+          e.preventDefault();
+          const sInput = document.getElementById('searchInput');
+          if (state.activeScreenId !== 'screenContacts') {
+            switchScreen('screenContacts');
+          }
+          sInput.focus();
+          break;
+
+        case '6': // Next contact
+          if (state.activeScreenId === 'screenProfile') {
+            navigateProfile(1);
+          }
+          break;
+
+        case '0': // Return to contacts list
+          if (state.activeScreenId === 'screenProfile') {
+            switchScreen('screenContacts');
+          }
+          break;
+
+        case '9': // Quick CSV Import
+          document.getElementById('fileCsvInput').click();
+          break;
+
+        // D-Pad Left / Right tab switching on top level
+        case 'ArrowLeft':
+          if (state.activeScreenId === 'screenContacts') {
+            navigateQueuePills(-1);
+          } else if (state.activeScreenId === 'screenProfile') {
+            navigateProfile(-1);
+          }
+          break;
+
+        case 'ArrowRight':
+          if (state.activeScreenId === 'screenContacts') {
+            navigateQueuePills(1);
+          } else if (state.activeScreenId === 'screenProfile') {
+            navigateProfile(1);
+          }
+          break;
+      }
+    });
+  }
+
+  function navigateQueuePills(dir) {
+    const pills = Array.from(document.querySelectorAll('.queue-pills .pill'));
+    const currentIdx = pills.findIndex(p => p.classList.contains('active'));
+    let nextIdx = currentIdx + dir;
+    if (nextIdx < 0) nextIdx = pills.length - 1;
+    if (nextIdx >= pills.length) nextIdx = 0;
+    pills[nextIdx].click();
+  }
+
+  // --- 17. Initialization ---
   async function initApp() {
-    // 1. Register PWA Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch((err) => {
-          console.warn('Service Worker registration skipped:', err);
-        });
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
       });
     }
 
-    // 2. Initialize Database and Load State
     await initDB();
     await loadSettings();
     await loadAllContacts();
 
-    // Populate Settings UI
     document.getElementById('templateSubject').value = state.settings.templateSubject;
     document.getElementById('templateBody').value = state.settings.templateBody;
     document.getElementById('inputDailyCallTarget').value = state.settings.dailyTargetCalls || 10;
@@ -1105,7 +1174,7 @@
       tab.addEventListener('click', () => switchScreen(tab.dataset.screen));
     });
 
-    // Profile screen navigation
+    // Profile navigation
     document.getElementById('btnBackToList').addEventListener('click', () => switchScreen('screenContacts'));
     document.getElementById('btnPrevContact').addEventListener('click', () => navigateProfile(-1));
     document.getElementById('btnNextContact').addEventListener('click', () => navigateProfile(1));
@@ -1151,7 +1220,7 @@
       document.getElementById('modalEmail').classList.add('hidden');
     });
 
-    // CSV File Select & Import Review events
+    // Import events
     document.getElementById('btnQuickImport').addEventListener('click', () => {
       document.getElementById('fileCsvInput').click();
     });
@@ -1175,7 +1244,7 @@
         state.settings.dailyTargetCalls = val;
         await saveSettings();
         await updateGamifiedMetrics();
-        alert('Daily outreach goal updated.');
+        alert('Goal saved.');
       }
     });
 
@@ -1183,7 +1252,7 @@
       state.settings.templateSubject = document.getElementById('templateSubject').value;
       state.settings.templateBody = document.getElementById('templateBody').value;
       await saveSettings();
-      alert('Email templates updated.');
+      alert('Template saved.');
     });
 
     document.getElementById('btnExportCsv').addEventListener('click', exportContactsCsv);
@@ -1193,19 +1262,19 @@
     });
 
     document.getElementById('btnClearAllData').addEventListener('click', () => {
-      if (confirm('Warning: This will delete all imported contacts and activity records from this browser profile. Are you sure?')) {
+      if (confirm('Erase all local contacts and logs?')) {
         const tx = dbInstance.transaction(['contacts', 'interactions'], 'readwrite');
         tx.objectStore('contacts').clear();
         tx.objectStore('interactions').clear();
         tx.oncomplete = () => {
           state.contacts = [];
           applyFiltersAndRender();
-          alert('Local database wiped clean.');
+          alert('Local data cleared.');
         };
       }
     });
 
-    // Initial render
+    setupHardwareKeypadShortcuts();
     applyFiltersAndRender();
   }
 

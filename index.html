@@ -2,100 +2,90 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Private, mobile-first dialler and contact management web application.">
-  <meta name="theme-color" content="#1e293b">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Compact, keypad-optimised British Racing Green dialler and contact manager.">
+  <meta name="theme-color" content="#041a10">
   <link rel="manifest" href="manifest.json">
-  <title>Personal Dialler &amp; Client Manager</title>
+  <title>Dialler &amp; Client Manager</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app" class="app-container">
-    <!-- Top Header & Gamified Outreach Hub -->
+    <!-- Compact Top Bar: British Racing Green & Gold Header -->
     <header class="app-header">
       <div class="header-main">
         <div class="header-branding">
+          <span class="gold-monogram">⚔</span>
           <h1 class="app-title">Dialler</h1>
-          <div id="streakBadge" class="streak-badge" title="Daily Calling Streak">
+          <div id="streakBadge" class="streak-badge" title="Daily Calling Streak" tabindex="0">
             <span class="streak-flame">🔥</span>
-            <span id="streakCountText" class="streak-text">0d Streak</span>
+            <span id="streakCountText" class="streak-text">0d</span>
           </div>
         </div>
         <div class="header-actions">
-          <button id="btnQuickImport" class="icon-btn" title="Import Contacts" aria-label="Import Contacts">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <button id="btnQuickImport" class="icon-btn gold-btn" title="Import Contacts [Key 9]" aria-label="Import Contacts">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </button>
         </div>
       </div>
 
-      <!-- Gamified Target Progress & Metrics Bar -->
-      <section class="gamified-metrics-hub" aria-label="Calling summary metrics">
-        <div class="daily-target-box">
-          <div class="progress-ring-wrapper">
-            <svg class="progress-ring" width="46" height="46">
-              <circle class="progress-ring-bg" stroke-width="4" fill="transparent" r="18" cx="23" cy="23" />
-              <circle id="targetProgressCircle" class="progress-ring-indicator" stroke-width="4" fill="transparent" r="18" cx="23" cy="23" />
-            </svg>
-            <div id="targetPercentLabel" class="target-pct">0%</div>
-          </div>
-          <div class="target-details">
-            <span class="target-title">Daily Outreach</span>
-            <span id="targetSubtext" class="target-subtitle">0 / 10 calls</span>
-          </div>
+      <!-- Compact Single-Row Outreach & Metric Ribbon -->
+      <section class="compact-metrics-ribbon" aria-label="Calling summary metrics">
+        <div class="mini-target-wrapper">
+          <svg class="mini-ring" width="34" height="34">
+            <circle class="ring-bg" stroke-width="3.5" fill="transparent" r="13" cx="17" cy="17" />
+            <circle id="targetProgressCircle" class="ring-indicator" stroke-width="3.5" fill="transparent" r="13" cx="17" cy="17" />
+          </svg>
+          <div id="targetPercentLabel" class="mini-target-pct">0%</div>
         </div>
 
-        <div class="metrics-grid">
-          <div class="metric-item" id="metricTotal">
+        <div class="ribbon-metrics">
+          <div class="ribbon-metric" id="metricTotal">
             <span class="metric-val">0</span>
             <span class="metric-lbl">Total</span>
           </div>
-          <div class="metric-item" id="metricUncontacted">
-            <span class="metric-val">0</span>
-            <span class="metric-lbl">New</span>
-          </div>
-          <div class="metric-item" id="metricDue">
-            <span class="metric-val">0</span>
+          <div class="ribbon-metric" id="metricDue">
+            <span class="metric-val gold-text">0</span>
             <span class="metric-lbl">Due</span>
           </div>
-          <div class="metric-item" id="metricCalls">
+          <div class="ribbon-metric" id="metricCalls">
             <span class="metric-val">0</span>
-            <span class="metric-lbl">Logged</span>
+            <span class="metric-lbl">Done</span>
           </div>
         </div>
       </section>
 
-      <!-- Queue Clearance Notification Banner -->
+      <!-- Queue Cleared Notification -->
       <div id="queueClearBanner" class="queue-clear-banner hidden" role="status">
-        🎯 <strong>Outstanding Queue Cleared!</strong> All scheduled follow-ups are up to date.
+        ✦ <strong>Queue Cleared!</strong> Follow-ups are up to date.
       </div>
     </header>
 
-    <!-- Global Notification/Feedback Banner for Call Return -->
+    <!-- Global Call Outcome Prompt Banner -->
     <aside id="callReturnPrompt" class="call-prompt hidden" aria-live="polite">
       <div class="prompt-content">
-        <p id="callPromptText">Log outcome for recent call?</p>
+        <p id="callPromptText">Log call outcome?</p>
         <div class="prompt-actions">
-          <button id="btnPromptLog" class="btn btn-primary btn-sm">Log Outcome</button>
-          <button id="btnPromptDismiss" class="btn btn-subtle btn-sm">Dismiss</button>
+          <button id="btnPromptLog" class="btn btn-gold btn-sm"><span class="key-badge">3</span> Log</button>
+          <button id="btnPromptDismiss" class="btn btn-subtle btn-sm">Skip</button>
         </div>
       </div>
     </aside>
 
-    <!-- Main Screens Container -->
+    <!-- Main Screens Viewport -->
     <main class="app-body">
       <!-- 1. Contacts Screen -->
       <section id="screenContacts" class="screen-view active">
-        <!-- Search and Filter Bar -->
-        <div class="search-section">
+        <!-- Compact Search & Queue Selector -->
+        <div class="compact-search-bar">
           <div class="search-input-wrapper">
-            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="search" id="searchInput" placeholder="Search name, phone, email, city, company..." autocomplete="off">
+            <input type="search" id="searchInput" placeholder="Search... [Press 5]" autocomplete="off" accesskey="s">
             <button id="btnClearSearch" class="btn-clear hidden" aria-label="Clear search">&times;</button>
           </div>
           <div class="queue-pills" role="tablist">
             <button class="pill active" data-queue="all" role="tab">All</button>
-            <button class="pill" data-queue="due" role="tab">Follow-ups Due</button>
-            <button class="pill" data-queue="new" role="tab">Uncontacted</button>
+            <button class="pill" data-queue="due" role="tab">Due</button>
+            <button class="pill" data-queue="new" role="tab">New</button>
             <button class="pill" data-queue="recent" role="tab">Recent</button>
           </div>
         </div>
@@ -103,45 +93,48 @@
         <!-- Contact List Feed -->
         <div id="contactList" class="contact-list" role="list">
           <div class="empty-state">
-            <p>No contacts available.</p>
-            <button id="btnEmptyImport" class="btn btn-secondary">Import CSV File</button>
+            <p>No contacts found.</p>
+            <button id="btnEmptyImport" class="btn btn-gold btn-sm">Import CSV</button>
           </div>
         </div>
       </section>
 
-      <!-- 2. Contact Profile Screen (Bento Grid Architecture) -->
+      <!-- 2. Contact Profile Screen (Small-Screen Bento Glass Layout) -->
       <section id="screenProfile" class="screen-view hidden">
-        <div class="profile-header">
-          <button id="btnBackToList" class="btn btn-subtle back-btn" aria-label="Back to contacts">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg> Contacts
+        <div class="profile-header-compact">
+          <button id="btnBackToList" class="btn btn-subtle btn-sm" aria-label="Back to contacts">
+            <span class="key-badge">0</span> ← Back
           </button>
           <div class="profile-nav-arrows">
-            <button id="btnPrevContact" class="icon-btn" title="Previous Contact" aria-label="Previous Contact">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <button id="btnPrevContact" class="icon-btn gold-btn btn-sm" title="Previous Contact [Key 4]" aria-label="Previous Contact">
+              <span class="key-badge">4</span> ◀
             </button>
-            <button id="btnNextContact" class="icon-btn" title="Next Contact" aria-label="Next Contact">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <button id="btnNextContact" class="icon-btn gold-btn btn-sm" title="Next Contact [Key 6]" aria-label="Next Contact">
+              ▶ <span class="key-badge">6</span>
             </button>
           </div>
         </div>
 
-        <!-- Dynamic Bento Grid Container -->
+        <!-- Scrollable Details Bento View -->
         <div id="profileDetails" class="profile-details-scroll">
-          <!-- Populated safely via Template & DocumentFragment -->
+          <!-- Populated safely via Template -->
         </div>
 
-        <!-- Sticky Primary Action Bar with Glassmorphism -->
+        <!-- Compact Sticky Action Dock with Keypad Labels -->
         <div class="bottom-action-dock">
-          <a id="btnActionCall" href="#" class="action-btn call-action">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <a id="btnActionCall" href="#" class="action-btn call-action" tabindex="0">
+            <span class="key-badge">1</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
             <span>Call</span>
           </a>
-          <button id="btnActionEmail" class="action-btn email-action">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <button id="btnActionEmail" class="action-btn email-action" tabindex="0">
+            <span class="key-badge">2</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
             <span>Email</span>
           </button>
-          <button id="btnActionDisposition" class="action-btn disposition-action">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <button id="btnActionDisposition" class="action-btn log-action" tabindex="0">
+            <span class="key-badge">3</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             <span>Log</span>
           </button>
         </div>
@@ -149,7 +142,7 @@
 
       <!-- 3. Follow-Ups Queue Screen -->
       <section id="screenFollowUps" class="screen-view hidden">
-        <h2 class="section-heading">Scheduled Follow-ups</h2>
+        <h2 class="section-heading">Due Follow-Ups</h2>
         <div id="followUpsList" class="contact-list">
           <!-- Populated dynamically -->
         </div>
@@ -157,95 +150,85 @@
 
       <!-- 4. Interaction History Screen -->
       <section id="screenHistory" class="screen-view hidden">
-        <h2 class="section-heading">Recent Interaction Logs</h2>
+        <h2 class="section-heading">Call &amp; Email Log</h2>
         <div id="globalHistoryList" class="history-list">
           <!-- Populated dynamically -->
         </div>
       </section>
 
-      <!-- 5. Settings, Templates & Data Screen -->
+      <!-- 5. Settings Screen -->
       <section id="screenSettings" class="screen-view hidden">
-        <h2 class="section-heading">Settings &amp; Preferences</h2>
+        <h2 class="section-heading">Preferences</h2>
         
-        <div class="settings-card">
-          <h3>Daily Outreach Target</h3>
-          <p class="settings-desc">Set your daily target number of calls to power your gamified progress ring.</p>
-          <div class="form-group">
-            <label for="inputDailyCallTarget">Calls Goal per Day</label>
-            <input type="number" id="inputDailyCallTarget" min="1" max="200" class="form-control" value="10">
+        <div class="glass-card">
+          <h3 class="card-title">Daily Call Goal</h3>
+          <div class="form-group inline-row">
+            <input type="number" id="inputDailyCallTarget" min="1" max="100" class="form-control" value="10">
+            <button id="btnSaveTargetGoal" class="btn btn-gold btn-sm">Save</button>
           </div>
-          <button id="btnSaveTargetGoal" class="btn btn-primary btn-sm">Save Goal</button>
         </div>
 
-        <div class="settings-card">
-          <h3>Import Contact CSV</h3>
-          <p class="settings-desc">Import new or updated records into your phone's IndexedDB storage.</p>
+        <div class="glass-card">
+          <h3 class="card-title">Import CSV</h3>
           <input type="file" id="fileCsvInput" accept=".csv,text/csv,text/plain" class="file-input-field">
-          <label for="fileCsvInput" class="btn btn-secondary file-input-label">Choose CSV File</label>
+          <label for="fileCsvInput" class="btn btn-gold btn-block">Choose File</label>
           <div id="importStatus" class="import-status-text"></div>
         </div>
 
-        <div class="settings-card">
-          <h3>Email Templates</h3>
-          <p class="settings-desc">Customise pre-filled email copy. Placeholders: <code>{name}</code>, <code>{first_name}</code>, <code>{company}</code>, <code>{phone}</code>.</p>
+        <div class="glass-card">
+          <h3 class="card-title">Email Copy Template</h3>
           <div class="form-group">
-            <label for="templateSubject">Default Subject Line</label>
+            <label for="templateSubject">Subject</label>
             <input type="text" id="templateSubject" class="form-control">
           </div>
           <div class="form-group">
-            <label for="templateBody">Default Email Body</label>
-            <textarea id="templateBody" class="form-control" rows="5"></textarea>
+            <label for="templateBody">Body</label>
+            <textarea id="templateBody" class="form-control" rows="4"></textarea>
           </div>
-          <button id="btnSaveTemplate" class="btn btn-primary btn-sm">Save Template</button>
+          <button id="btnSaveTemplate" class="btn btn-gold btn-sm">Save Template</button>
         </div>
 
-        <div class="settings-card">
-          <h3>Backup &amp; Export</h3>
-          <p class="settings-desc">Keep your data safe or transfer it to another browser.</p>
+        <div class="glass-card">
+          <h3 class="card-title">Backup &amp; Data</h3>
           <div class="btn-group-stacked">
-            <button id="btnExportCsv" class="btn btn-subtle">Export Contacts (CSV)</button>
-            <button id="btnExportJsonBackup" class="btn btn-subtle">Download Complete Backup (JSON)</button>
-          </div>
-          
-          <div class="restore-wrapper">
-            <label for="fileJsonRestore" class="btn btn-subtle file-input-label">Restore from JSON</label>
+            <button id="btnExportCsv" class="btn btn-subtle">Export Contacts CSV</button>
+            <button id="btnExportJsonBackup" class="btn btn-subtle">Export JSON Backup</button>
+            <label for="fileJsonRestore" class="btn btn-subtle file-input-label">Restore JSON</label>
             <input type="file" id="fileJsonRestore" accept=".json,application/json" class="file-input-field">
           </div>
         </div>
 
-        <div class="settings-card danger-card">
-          <h3>Clear Database</h3>
-          <p class="settings-desc">Erase all locally cached contacts, logs, and custom templates.</p>
-          <button id="btnClearAllData" class="btn btn-danger">Erase All Local Data</button>
+        <div class="glass-card danger-card">
+          <button id="btnClearAllData" class="btn btn-danger btn-block">Wipe All Local Data</button>
         </div>
       </section>
     </main>
 
-    <!-- Bottom Tab Navigation -->
+    <!-- Bottom Tab Navigation: High Contrast & D-Pad Accessible -->
     <nav class="app-nav" aria-label="Main Navigation">
-      <button class="nav-tab active" data-screen="screenContacts">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Contacts</span>
+      <button class="nav-tab active" data-screen="screenContacts" tabindex="0">
+        <span class="tab-icon">👤</span>
+        <span class="tab-label">Contacts</span>
       </button>
-      <button class="nav-tab" data-screen="screenFollowUps">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span>Follow-ups</span>
+      <button class="nav-tab" data-screen="screenFollowUps" tabindex="0">
+        <span class="tab-icon">⏰</span>
+        <span class="tab-label">Due</span>
       </button>
-      <button class="nav-tab" data-screen="screenHistory">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span>History</span>
+      <button class="nav-tab" data-screen="screenHistory" tabindex="0">
+        <span class="tab-icon">📜</span>
+        <span class="tab-label">Logs</span>
       </button>
-      <button class="nav-tab" data-screen="screenSettings">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Settings</span>
+      <button class="nav-tab" data-screen="screenSettings" tabindex="0">
+        <span class="tab-icon">⚙</span>
+        <span class="tab-label">Config</span>
       </button>
     </nav>
 
-    <!-- Modal: Call Disposition & Outcome Logging -->
+    <!-- Modal: Call Outcome Logger -->
     <div id="modalDisposition" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalDispTitle">
       <div class="modal-sheet">
         <div class="modal-header">
-          <h2 id="modalDispTitle">Log Call Outcome</h2>
+          <h2 id="modalDispTitle">Log Outcome</h2>
           <button id="btnCloseModalDisp" class="btn-clear" aria-label="Close dialog">&times;</button>
         </div>
         <form id="formDisposition" class="modal-body">
@@ -254,103 +237,95 @@
           <div class="form-group">
             <label for="dispOutcome">Outcome</label>
             <select id="dispOutcome" class="form-control" required>
-              <option value="No answer">No answer</option>
-              <option value="Voicemail left">Voicemail left</option>
               <option value="Spoke — interested">Spoke — interested</option>
-              <option value="Spoke — not interested">Spoke — not interested</option>
               <option value="Callback requested">Callback requested</option>
+              <option value="Voicemail left">Voicemail left</option>
+              <option value="No answer">No answer</option>
+              <option value="Spoke — not interested">Spoke — not interested</option>
               <option value="Email requested">Email requested</option>
               <option value="Follow-up required">Follow-up required</option>
               <option value="Wrong number">Wrong number</option>
               <option value="Do not contact">Do not contact</option>
-              <option value="Other">Other</option>
             </select>
           </div>
 
           <div class="form-group">
             <label for="dispNote">Notes</label>
-            <textarea id="dispNote" class="form-control" rows="3" placeholder="Key points from the conversation..."></textarea>
+            <textarea id="dispNote" class="form-control" rows="2" placeholder="Summary notes..."></textarea>
           </div>
 
           <div class="form-group">
-            <label for="dispFollowUpDate">Next Follow-Up (Optional)</label>
+            <label for="dispFollowUpDate">Next Follow-Up</label>
             <input type="datetime-local" id="dispFollowUpDate" class="form-control">
           </div>
 
           <div class="modal-footer">
             <button type="button" id="btnCancelDisp" class="btn btn-subtle">Cancel</button>
-            <button type="submit" class="btn btn-primary">Save Interaction</button>
+            <button type="submit" class="btn btn-gold">Save [Enter]</button>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Modal: Email Preparation & Review -->
+    <!-- Modal: Email Form -->
     <div id="modalEmail" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalEmailTitle">
       <div class="modal-sheet">
         <div class="modal-header">
-          <h2 id="modalEmailTitle">Prepare Email</h2>
+          <h2 id="modalEmailTitle">Draft Email</h2>
           <button id="btnCloseModalEmail" class="btn-clear" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="emailTo">Recipient</label>
             <input type="email" id="emailTo" class="form-control" readonly>
           </div>
           <div class="form-group">
-            <label for="emailSubject">Subject</label>
-            <input type="text" id="emailSubject" class="form-control">
+            <input type="text" id="emailSubject" class="form-control" placeholder="Subject">
           </div>
           <div class="form-group">
-            <label for="emailBody">Body</label>
-            <textarea id="emailBody" class="form-control" rows="6"></textarea>
+            <textarea id="emailBody" class="form-control" rows="4"></textarea>
           </div>
           <div class="email-routes">
-            <button id="btnLaunchMailto" class="btn btn-primary btn-block">Open Default Email App</button>
-            <button id="btnLaunchGmailWeb" class="btn btn-subtle btn-block">Open in Gmail Web</button>
+            <button id="btnLaunchMailto" class="btn btn-gold btn-block">Open Mail App</button>
+            <button id="btnLaunchGmailWeb" class="btn btn-subtle btn-block">Open Web Gmail</button>
           </div>
           <div id="emailConfirmNotice" class="email-verification-panel hidden">
-            <p>Did you send this message?</p>
+            <p>Did you send the message?</p>
             <div class="btn-row">
-              <button id="btnConfirmEmailSent" class="btn btn-secondary btn-sm">Yes, Log as Sent</button>
-              <button id="btnCancelEmailSent" class="btn btn-subtle btn-sm">No, Keep Draft</button>
+              <button id="btnConfirmEmailSent" class="btn btn-gold btn-sm">Yes, Log It</button>
+              <button id="btnCancelEmailSent" class="btn btn-subtle btn-sm">Cancel</button>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Modal: CSV Import Review & Duplicate Resolution -->
+    <!-- Modal: CSV Review -->
     <div id="modalImportReview" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalImportTitle">
       <div class="modal-sheet">
         <div class="modal-header">
-          <h2 id="modalImportTitle">Review CSV Import</h2>
+          <h2 id="modalImportTitle">Import Review</h2>
           <button id="btnCloseModalImport" class="btn-clear" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body">
           <div id="importSummaryDetails" class="import-summary-box"></div>
           <div class="form-group">
-            <label for="importDuplicateStrategy">Duplicate Handling Rule</label>
+            <label for="importDuplicateStrategy">Duplicates Strategy</label>
             <select id="importDuplicateStrategy" class="form-control">
-              <option value="skip">Skip duplicates (keep existing)</option>
-              <option value="overwrite">Overwrite existing details (preserve history)</option>
-              <option value="keepBoth">Create as new contacts</option>
+              <option value="skip">Skip duplicates</option>
+              <option value="overwrite">Overwrite existing</option>
+              <option value="keepBoth">Keep both</option>
             </select>
           </div>
           <div class="modal-footer">
             <button id="btnCancelImport" class="btn btn-subtle">Cancel</button>
-            <button id="btnCommitImport" class="btn btn-primary">Proceed with Import</button>
+            <button id="btnCommitImport" class="btn btn-gold">Import</button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- =========================================================================
-       HTML5 Templates for Safe, Scalable, Zero-XSS DOM Rendering
-       ========================================================================= -->
-
-  <!-- 1. Contact Card Template -->
+  <!-- HTML Templates for High Speed Rendering -->
   <template id="tmpl-contact-card">
     <div class="contact-card" role="listitem" tabindex="0">
       <div class="contact-card-info">
@@ -359,12 +334,10 @@
       </div>
       <div class="contact-card-status">
         <span class="badge"></span>
-        <span class="contact-date-lbl"></span>
       </div>
     </div>
   </template>
 
-  <!-- 2. History Item Template -->
   <template id="tmpl-history-item">
     <div class="history-item">
       <div class="history-header">
@@ -376,67 +349,52 @@
     </div>
   </template>
 
-  <!-- 3. Bento Grid Profile Template -->
   <template id="tmpl-bento-profile">
-    <div class="bento-grid">
-      <!-- Hero Tile -->
-      <div class="bento-tile bento-hero">
-        <div class="bento-hero-top">
+    <div class="profile-stack">
+      <!-- Hero Glass Card -->
+      <div class="glass-card hero-glass-card">
+        <div class="card-hero-row">
           <div class="bento-avatar"></div>
+          <div class="hero-titles">
+            <h2 class="bento-name"></h2>
+            <div class="bento-role-company"></div>
+          </div>
           <span class="badge bento-status-badge"></span>
         </div>
-        <h2 class="bento-name"></h2>
-        <div class="bento-role-company"></div>
       </div>
 
-      <!-- Quick Comms Tile -->
-      <div class="bento-tile bento-comms">
-        <h3 class="bento-tile-title">Contact Channels</h3>
+      <!-- Quick Details Card -->
+      <div class="glass-card">
         <div class="bento-comm-item">
-          <span class="bento-comm-icon">📞</span>
-          <div class="bento-comm-details">
-            <span class="bento-comm-label">Phone</span>
-            <span class="bento-comm-val bento-phone-val"></span>
-          </div>
+          <span class="gold-icon">📞</span>
+          <span class="bento-phone-val select-text"></span>
         </div>
         <div class="bento-comm-item">
-          <span class="bento-comm-icon">✉️</span>
-          <div class="bento-comm-details">
-            <span class="bento-comm-label">Email</span>
-            <span class="bento-comm-val bento-email-val"></span>
-          </div>
+          <span class="gold-icon">✉️</span>
+          <span class="bento-email-val select-text"></span>
         </div>
       </div>
 
-      <!-- Follow-Up Schedule Tile -->
-      <div class="bento-tile bento-schedule">
-        <h3 class="bento-tile-title">Next Outreach</h3>
-        <div class="bento-schedule-status">
-          <span class="schedule-icon">⏰</span>
-          <div class="schedule-details">
-            <span class="schedule-date-text">None Scheduled</span>
-            <span class="schedule-relative-time">Tap Log to set reminder</span>
-          </div>
+      <!-- Outreach Reminder Card -->
+      <div class="glass-card">
+        <div class="card-head-row">
+          <span class="card-caption">Next Scheduled</span>
+          <span class="schedule-relative-time"></span>
         </div>
+        <div class="schedule-date-text gold-text"></div>
       </div>
 
-      <!-- Logistics / Address Tile -->
-      <div class="bento-tile bento-logistics">
-        <h3 class="bento-tile-title">Location &amp; Office</h3>
-        <p class="bento-address-text"></p>
-      </div>
-
-      <!-- Notes Memo Tile -->
-      <div class="bento-tile bento-notes-tile">
-        <h3 class="bento-tile-title">Key Notes &amp; Context</h3>
+      <!-- Notes Memo Card -->
+      <div class="glass-card">
+        <span class="card-caption">Notes &amp; Context</span>
         <p class="bento-notes-content"></p>
       </div>
 
-      <!-- Activity Timeline Tile -->
-      <div class="bento-tile bento-timeline-tile">
-        <div class="bento-tile-header-row">
-          <h3 class="bento-tile-title">Activity Feed</h3>
-          <span class="bento-log-count">0 logs</span>
+      <!-- History Activity Feed -->
+      <div class="glass-card">
+        <div class="card-head-row">
+          <span class="card-caption">Interactions</span>
+          <span class="bento-log-count">0</span>
         </div>
         <div class="bento-history-list history-list"></div>
       </div>
