@@ -1,8 +1,8 @@
 /**
  * PERSONAL DIALER & CLIENT CONTACT MANAGEMENT
- * Compact Mobile & Hardware Keypad (CAT S22 Flip / D-Pad) Engine
- * With On-The-Fly Contact Detail Editing (Key 7 / Enter)
- * British Racing Green & Gold Edition
+ * Bubbly Flip Phone Engine with Full Physical Keypad & D-Pad Controls
+ * Optimized for CAT S22 Flip (2.8" display)
+ * British Racing Green & Illuminated Gold Edition
  */
 
 (() => {
@@ -68,6 +68,7 @@
     emailDraftContext: null,
     parsedImportData: null,
     activeScreenId: 'screenContacts',
+    focusedCardIndex: 0,
     settings: {
       templateSubject: 'Following up regarding our conversation',
       templateBody: 'Hi {first_name},\n\nThank you for speaking today. As discussed, following up with details.\n\nBest regards,\n[Your Name]',
@@ -333,25 +334,19 @@
     });
   }
 
-  // --- 6. Metric Computation & Gamification ---
-  async function updateGamifiedMetrics() {
-    const total = state.contacts.length;
+  // --- 6. Ambient Status Computations ---
+  async function updateAmbientStatus() {
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-    const dueToday = state.contacts.filter(c => {
+    const dueCount = state.contacts.filter(c => {
       if (!c.next_follow_up_at || c.status === 'do_not_contact') return false;
       return new Date(c.next_follow_up_at) <= todayEnd;
     }).length;
 
     const allLogs = await getAllInteractions();
-    const callsTotal = allLogs.filter(l => l.type === 'call').length;
 
-    const callsToday = allLogs.filter(l => {
-      return l.type === 'call' && l.timestamp.slice(0, 10) === todayStr;
-    }).length;
-
+    // Streak count
     const distinctCallDays = new Set(
       allLogs
         .filter(l => l.type === 'call')
@@ -376,27 +371,7 @@
     }
 
     document.getElementById('streakCountText').textContent = `${streak}d`;
-
-    const goal = state.settings.dailyTargetCalls || 10;
-    const pct = Math.min(100, Math.round((callsToday / goal) * 100));
-    
-    const ringCircle = document.getElementById('targetProgressCircle');
-    const circumference = 2 * Math.PI * 13;
-    const offset = circumference - (pct / 100) * circumference;
-    ringCircle.style.strokeDashoffset = offset;
-
-    document.getElementById('targetPercentLabel').textContent = `${pct}%`;
-
-    const clearBanner = document.getElementById('queueClearBanner');
-    if (dueToday === 0 && total > 0) {
-      clearBanner.classList.remove('hidden');
-    } else {
-      clearBanner.classList.add('hidden');
-    }
-
-    document.getElementById('metricTotal').querySelector('.metric-val').textContent = total;
-    document.getElementById('metricDue').querySelector('.metric-val').textContent = dueToday;
-    document.getElementById('metricCalls').querySelector('.metric-val').textContent = callsTotal;
+    document.getElementById('dueCounterText').textContent = `${dueCount} due`;
   }
 
   // --- 7. List Filtering & Rendering ---
@@ -439,7 +414,7 @@
     });
 
     renderContactList();
-    updateGamifiedMetrics();
+    updateAmbientStatus();
   }
 
   function renderContactList() {
@@ -447,9 +422,9 @@
     
     if (state.filteredContacts.length === 0) {
       listContainer.innerHTML = `
-        <div class="empty-state">
+        <div class="empty-state-bubble">
           <p>No contacts found.</p>
-          <button id="btnEmptyImportTrigger" class="btn btn-gold btn-sm">Import CSV</button>
+          <button id="btnEmptyImportTrigger" class="btn btn-gold btn-sm"><span class="k-badge">9</span> Import CSV</button>
         </div>`;
       const btn = document.getElementById('btnEmptyImportTrigger');
       if (btn) btn.onclick = () => document.getElementById('fileCsvInput').click();
@@ -461,29 +436,40 @@
 
     state.filteredContacts.forEach((contact, idx) => {
       const clone = template.content.cloneNode(true);
-      const card = clone.querySelector('.contact-card');
+      const card = clone.querySelector('.bubbly-contact-card');
       card.dataset.id = contact.id;
       card.dataset.index = idx;
 
-      card.querySelector('.contact-name').textContent = contact.name;
+      // Avatar
+      card.querySelector('.card-avatar').textContent = getInitials(contact.name);
+
+      // Name & details
+      card.querySelector('.card-name').textContent = contact.name;
       
       const metaParts = [];
-      if (contact.company) metaParts.push(contact.company);
+      if (contact.job_title && contact.company) metaParts.push(`${contact.job_title} at ${contact.company}`);
+      else if (contact.company) metaParts.push(contact.company);
       else if (contact.phone) metaParts.push(contact.phone);
-      card.querySelector('.contact-meta').textContent = metaParts.join(' • ') || 'No company';
+      card.querySelector('.card-meta').textContent = metaParts.join(' • ') || 'No company registered';
 
-      const badge = card.querySelector('.badge');
+      const submetaParts = [];
+      if (contact.phone && metaParts[0] !== contact.phone) submetaParts.push(contact.phone);
+      if (contact.city) submetaParts.push(contact.city);
+      card.querySelector('.card-submeta').textContent = submetaParts.join(' • ');
+
+      // Badge
+      const badge = card.querySelector('.bubbly-badge');
       if (contact.status === 'do_not_contact') {
-        badge.className = 'badge badge-dnc';
+        badge.className = 'bubbly-badge badge-dnc';
         badge.textContent = 'DNC';
       } else if (contact.next_follow_up_at && new Date(contact.next_follow_up_at) <= new Date()) {
-        badge.className = 'badge badge-due';
+        badge.className = 'bubbly-badge badge-due';
         badge.textContent = 'Due';
       } else if (contact.last_contacted_at) {
-        badge.className = 'badge badge-contacted';
+        badge.className = 'bubbly-badge badge-contacted';
         badge.textContent = 'Done';
       } else {
-        badge.className = 'badge badge-new';
+        badge.className = 'bubbly-badge badge-new';
         badge.textContent = 'New';
       }
 
@@ -492,9 +478,28 @@
     });
 
     listContainer.replaceChildren(fragment);
+
+    // Apply D-Pad focus to first card if applicable
+    highlightCurrentCard(false);
   }
 
-  // --- 8. Profile View & Sticky Actions ---
+  function highlightCurrentCard(shouldScroll = true) {
+    const cards = document.querySelectorAll('.bubbly-contact-card');
+    if (cards.length === 0) return;
+
+    if (state.focusedCardIndex < 0) state.focusedCardIndex = 0;
+    if (state.focusedCardIndex >= cards.length) state.focusedCardIndex = cards.length - 1;
+
+    cards.forEach((c, idx) => {
+      c.classList.toggle('focused-dpad', idx === state.focusedCardIndex);
+    });
+
+    if (shouldScroll && cards[state.focusedCardIndex]) {
+      cards[state.focusedCardIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  // --- 8. Profile View & Actions ---
   function openContactProfile(contactId) {
     const index = state.filteredContacts.findIndex(c => c.id === contactId);
     if (index === -1) return;
@@ -510,52 +515,58 @@
     const clone = template.content.cloneNode(true);
 
     // Hero
-    clone.querySelector('.bento-avatar').textContent = getInitials(contact.name);
-    clone.querySelector('.bento-name').textContent = contact.name;
+    clone.querySelector('.hero-avatar').textContent = getInitials(contact.name);
+    clone.querySelector('.hero-name').textContent = contact.name;
     
     const roleParts = [];
     if (contact.job_title) roleParts.push(contact.job_title);
     if (contact.company) roleParts.push(contact.company);
-    clone.querySelector('.bento-role-company').textContent = roleParts.join(' at ') || 'No company listed';
+    clone.querySelector('.hero-title-company').textContent = roleParts.join(' at ') || 'No company listed';
 
-    const statusBadge = clone.querySelector('.bento-status-badge');
+    clone.querySelector('.hero-counter-label').textContent = `${state.currentContactIndex + 1} of ${state.filteredContacts.length}`;
+
+    const statusBadge = clone.querySelector('.hero-badge');
     if (contact.status === 'do_not_contact') {
-      statusBadge.className = 'badge badge-dnc';
+      statusBadge.className = 'bubbly-badge badge-dnc';
       statusBadge.textContent = 'DNC';
     } else if (contact.next_follow_up_at && new Date(contact.next_follow_up_at) <= new Date()) {
-      statusBadge.className = 'badge badge-due';
+      statusBadge.className = 'bubbly-badge badge-due';
       statusBadge.textContent = 'Overdue';
     } else {
-      statusBadge.className = 'badge badge-new';
+      statusBadge.className = 'bubbly-badge badge-new';
       statusBadge.textContent = contact.status;
     }
 
     // Direct Comms
-    clone.querySelector('.bento-phone-val').textContent = contact.phone || 'None registered';
-    clone.querySelector('.bento-email-val').textContent = contact.email || 'None registered';
+    clone.querySelector('.profile-phone-val').textContent = contact.phone || 'None registered';
+    clone.querySelector('.profile-email-val').textContent = contact.email || 'None registered';
 
     // Outreach
-    const scheduleDateText = clone.querySelector('.schedule-date-text');
-    const scheduleRelativeTime = clone.querySelector('.schedule-relative-time');
+    const scheduleDateText = clone.querySelector('.schedule-date-highlight');
+    const scheduleRelativeTime = clone.querySelector('.schedule-status-tag');
     if (contact.next_follow_up_at) {
       scheduleDateText.textContent = formatDate(contact.next_follow_up_at);
       const isOverdue = new Date(contact.next_follow_up_at) < new Date();
       scheduleRelativeTime.textContent = isOverdue ? '⚠️ Overdue' : 'Scheduled';
     } else {
       scheduleDateText.textContent = 'None Scheduled';
-      scheduleRelativeTime.textContent = 'Press 3 to log';
+      scheduleRelativeTime.textContent = 'Press 3 to set';
     }
 
-    // Location / Address
+    // Address
     const addressStr = [contact.street_address, contact.city, contact.postal_code, contact.country]
       .filter(Boolean)
       .join(', ');
-    clone.querySelector('.bento-address-val').textContent = addressStr || 'No address registered.';
+    clone.querySelector('.profile-address-val').textContent = addressStr || 'No address registered.';
 
     // Notes
-    clone.querySelector('.bento-notes-content').textContent = contact.notes || 'No notes added.';
+    clone.querySelector('.profile-notes-val').textContent = contact.notes || 'No notes added yet.';
 
-    // Sticky Action Dock setup
+    // Navigation Buttons inside card
+    clone.querySelector('#btnPrevProfile').onclick = () => navigateProfile(-1);
+    clone.querySelector('#btnNextProfile').onclick = () => navigateProfile(1);
+
+    // Contextual Bottom Action Dock setup
     const dialPhone = normalisePhoneForDial(contact.phone);
     const callBtn = document.getElementById('btnActionCall');
     if (dialPhone) {
@@ -578,25 +589,25 @@
     detailsContainer.replaceChildren(clone);
 
     // Populate Activity Timeline
-    const historyListContainer = detailsContainer.querySelector('.bento-history-list');
-    const logCountLabel = detailsContainer.querySelector('.bento-log-count');
+    const historyListContainer = detailsContainer.querySelector('.profile-history-stream');
+    const logCountLabel = detailsContainer.querySelector('.profile-logs-count');
     const historyLogs = await getInteractionsForContact(contact.id);
     
     logCountLabel.textContent = `${historyLogs.length}`;
 
     if (historyLogs.length === 0) {
-      historyListContainer.innerHTML = '<p style="font-size: 0.72rem; color: var(--text-muted); padding: 4px 0;">No logs yet.</p>';
+      historyListContainer.innerHTML = '<p style="font-size: 0.78rem; color: var(--text-muted); padding: 4px 0;">No recorded interactions yet.</p>';
     } else {
       const histTemplate = document.getElementById('tmpl-history-item');
       const histFragment = document.createDocumentFragment();
 
       historyLogs.forEach(log => {
         const hClone = histTemplate.content.cloneNode(true);
-        hClone.querySelector('.history-meta-badge').textContent = log.type.toUpperCase();
-        hClone.querySelector('.history-date').textContent = formatDate(log.timestamp);
-        hClone.querySelector('.history-outcome').textContent = log.outcome;
+        hClone.querySelector('.log-type-tag').textContent = log.type.toUpperCase();
+        hClone.querySelector('.log-date').textContent = formatDate(log.timestamp);
+        hClone.querySelector('.log-outcome').textContent = log.outcome;
         
-        const noteEl = hClone.querySelector('.history-notes');
+        const noteEl = hClone.querySelector('.log-note');
         if (log.note) {
           noteEl.textContent = log.note;
           noteEl.classList.remove('hidden');
@@ -616,7 +627,7 @@
     }
   }
 
-  // --- 9. On-the-Fly Contact Detail Editing (Key 7 / Button) ---
+  // --- 9. On-the-Fly Contact Detail Editing (Key 7) ---
   function openEditContactModal(contact) {
     if (!contact) return;
     document.getElementById('editContactId').value = contact.id;
@@ -642,7 +653,6 @@
     const contact = state.contacts.find(c => c.id === contactId);
     if (!contact) return;
 
-    // Update fields immediately
     contact.name = document.getElementById('editName').value.trim() || 'Unnamed Contact';
     contact.phone = document.getElementById('editPhone').value.trim();
     contact.email = document.getElementById('editEmail').value.trim();
@@ -664,7 +674,7 @@
     }
   }
 
-  // --- 10. Screen Navigation ---
+  // --- 10. Screen Navigation & Bottom Dock Switcher ---
   function switchScreen(targetScreenId) {
     state.activeScreenId = targetScreenId;
 
@@ -680,8 +690,24 @@
       activeScreen.scrollTop = 0;
     }
 
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-      tab.classList.toggle('active', tab.dataset.screen === targetScreenId);
+    // Update screen title crumb
+    const titleMap = {
+      screenContacts: 'Contacts',
+      screenProfile: 'Profile',
+      screenFollowUps: 'Due Queue',
+      screenHistory: 'Logs',
+      screenSettings: 'Config'
+    };
+    document.getElementById('activeScreenTitle').textContent = titleMap[targetScreenId] || 'Dialler';
+
+    // Toggle between Default Tab Dock and Profile Action Dock
+    const isProfile = targetScreenId === 'screenProfile';
+    document.getElementById('dockDefaultView').classList.toggle('hidden', isProfile);
+    document.getElementById('dockProfileView').classList.toggle('hidden', !isProfile);
+
+    // Update active tab highlight in default dock
+    document.querySelectorAll('.dock-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.screen === targetScreenId);
     });
 
     if (targetScreenId === 'screenContacts') {
@@ -693,7 +719,7 @@
     }
   }
 
-  // --- 11. Call Return Detection via Page Visibility API ---
+  // --- 11. Call Return Detection via Visibility API ---
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && state.pendingCallContact) {
       const elapsed = Date.now() - state.lastCallTimestamp;
@@ -705,7 +731,7 @@
     }
   });
 
-  // --- 12. Call Disposition Logging Workflow ---
+  // --- 12. Call Disposition Logging (Key 3) ---
   function openDispositionModal(contact) {
     if (!contact) return;
     document.getElementById('dispContactId').value = contact.id;
@@ -749,7 +775,7 @@
     }
   }
 
-  // --- 13. Email Preparation Workflow ---
+  // --- 13. Email Flow (Key 2) ---
   function openEmailModal(contact) {
     if (!contact || !contact.email) {
       alert('No email registered.');
@@ -813,7 +839,7 @@
     }
   }
 
-  // --- 14. Follow-Ups & History Views ---
+  // --- 14. Follow-Ups & Global History Views ---
   async function renderFollowUpsScreen() {
     const container = document.getElementById('followUpsList');
     const scheduled = state.contacts
@@ -821,7 +847,7 @@
       .sort((a, b) => new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at));
 
     if (scheduled.length === 0) {
-      container.innerHTML = '<div class="empty-state"><p>No scheduled follow-ups.</p></div>';
+      container.innerHTML = '<div class="empty-state-bubble"><p>No scheduled follow-ups.</p></div>';
       return;
     }
 
@@ -830,15 +856,17 @@
 
     scheduled.forEach(c => {
       const clone = template.content.cloneNode(true);
-      const card = clone.querySelector('.contact-card');
+      const card = clone.querySelector('.bubbly-contact-card');
       card.dataset.id = c.id;
 
-      card.querySelector('.contact-name').textContent = c.name;
-      card.querySelector('.contact-meta').textContent = formatDate(c.next_follow_up_at);
+      card.querySelector('.card-avatar').textContent = getInitials(c.name);
+      card.querySelector('.card-name').textContent = c.name;
+      card.querySelector('.card-meta').textContent = formatDate(c.next_follow_up_at);
+      card.querySelector('.card-submeta').textContent = c.phone || c.email || '';
       
-      const badge = card.querySelector('.badge');
+      const badge = card.querySelector('.bubbly-badge');
       const isOverdue = new Date(c.next_follow_up_at) < new Date();
-      badge.className = `badge ${isOverdue ? 'badge-due' : 'badge-contacted'}`;
+      badge.className = `bubbly-badge ${isOverdue ? 'badge-due' : 'badge-contacted'}`;
       badge.textContent = isOverdue ? 'Overdue' : 'Due';
 
       card.addEventListener('click', () => openContactProfile(c.id));
@@ -853,7 +881,7 @@
     const logs = await getAllInteractions();
 
     if (logs.length === 0) {
-      container.innerHTML = '<div class="empty-state"><p>No interactions logged yet.</p></div>';
+      container.innerHTML = '<div class="empty-state-bubble"><p>No interactions logged yet.</p></div>';
       return;
     }
 
@@ -866,11 +894,11 @@
       const contact = state.contacts.find(c => c.id === log.contact_id);
       const contactName = contact ? contact.name : 'Unknown';
 
-      clone.querySelector('.history-meta-badge').textContent = `${contactName} • ${log.type.toUpperCase()}`;
-      clone.querySelector('.history-date').textContent = formatDate(log.timestamp);
-      clone.querySelector('.history-outcome').textContent = log.outcome;
+      clone.querySelector('.log-type-tag').textContent = `${contactName} • ${log.type.toUpperCase()}`;
+      clone.querySelector('.log-date').textContent = formatDate(log.timestamp);
+      clone.querySelector('.log-outcome').textContent = log.outcome;
 
-      const notesEl = clone.querySelector('.history-notes');
+      const notesEl = clone.querySelector('.log-note');
       if (log.note) {
         notesEl.textContent = log.note;
         notesEl.classList.remove('hidden');
@@ -882,7 +910,7 @@
     container.replaceChildren(fragment);
   }
 
-  // --- 15. Import CSV with Fast Deduplication ---
+  // --- 15. CSV Import Logic ---
   function handleCsvFileSelect(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -921,7 +949,7 @@
         summaryBox.replaceChildren();
 
         const p1 = document.createElement('p');
-        p1.innerHTML = `Total Rows: <strong>${imported.length}</strong>`;
+        p1.innerHTML = `Parsed: <strong>${imported.length} contacts</strong>`;
         const p2 = document.createElement('p');
         p2.innerHTML = `Duplicates: <strong>${duplicatesCount}</strong>`;
         summaryBox.appendChild(p1);
@@ -983,7 +1011,7 @@
       document.getElementById('fileCsvInput').value = '';
       await loadAllContacts();
       applyFiltersAndRender();
-      alert('Contacts imported successfully.');
+      alert('Contacts imported.');
     };
 
     tx.onerror = (e) => {
@@ -1066,13 +1094,13 @@
     reader.readAsText(file);
   }
 
-  // --- 17. Hardware Keypad & D-Pad Keyboard Controller ---
+  // --- 17. COMPLETE PHYSICAL KEYPAD (0-9, *, #) & D-PAD ENGINE ---
   function setupHardwareKeypadShortcuts() {
     window.addEventListener('keydown', (e) => {
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
       const isInputActive = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // Global Escape / Back key
+      // 1. GLOBAL ESCAPE / BACK BUTTON (Hardware Flip Phone Back key)
       if (e.key === 'Escape' || e.key === 'Backspace') {
         const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
         if (openModal) {
@@ -1085,99 +1113,177 @@
           e.preventDefault();
           return;
         }
+        if (document.getElementById('callReturnPrompt') && !document.getElementById('callReturnPrompt').classList.contains('hidden')) {
+          document.getElementById('callReturnPrompt').classList.add('hidden');
+          e.preventDefault();
+          return;
+        }
       }
 
+      // If typing in input, let normal characters pass through, but handle Enter/Escape
       if (isInputActive) {
-        if (e.key === 'Enter' && activeTag === 'input' && document.activeElement.id === 'searchInput') {
-          document.activeElement.blur();
+        if (e.key === 'Enter') {
+          if (document.activeElement.id === 'searchInput') {
+            document.activeElement.blur();
+            e.preventDefault();
+          }
         }
         return;
       }
 
-      // Keypad Shortcuts (1-9)
+      // 2. D-PAD NAVIGATION (Arrow Up / Down / Left / Right / Enter)
+      if (state.activeScreenId === 'screenContacts') {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          state.focusedCardIndex++;
+          highlightCurrentCard(true);
+          return;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          state.focusedCardIndex--;
+          highlightCurrentCard(true);
+          return;
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (state.filteredContacts[state.focusedCardIndex]) {
+            openContactProfile(state.filteredContacts[state.focusedCardIndex].id);
+          }
+          return;
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          cycleQueue(-1);
+          return;
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          cycleQueue(1);
+          return;
+        }
+      } else if (state.activeScreenId === 'screenProfile') {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          navigateProfile(-1);
+          return;
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          navigateProfile(1);
+          return;
+        }
+      }
+
+      // 3. PHYSICAL NUMERIC KEYPAD SHORTCUTS (1-9, 0, *, #)
       switch (e.key) {
-        case '1': // Call
+        // [Key 1] CALL (or switch to Contacts tab)
+        case '1':
           if (state.activeScreenId === 'screenProfile') {
             const callBtn = document.getElementById('btnActionCall');
-            if (callBtn && callBtn.href && callBtn.href !== '#') {
-              callBtn.click();
+            if (callBtn && callBtn.href && callBtn.href !== '#') callBtn.click();
+          } else if (state.activeScreenId === 'screenContacts') {
+            // Direct call highlighted contact!
+            const targetContact = state.filteredContacts[state.focusedCardIndex];
+            if (targetContact && targetContact.phone) {
+              state.lastCallTimestamp = Date.now();
+              state.pendingCallContact = targetContact;
+              window.location.href = `tel:${normalisePhoneForDial(targetContact.phone)}`;
+            } else {
+              switchScreen('screenContacts');
             }
+          } else {
+            switchScreen('screenContacts');
           }
           break;
 
-        case '2': // Email
+        // [Key 2] EMAIL (or switch to Due tab)
+        case '2':
           if (state.activeScreenId === 'screenProfile') {
             document.getElementById('btnActionEmail').click();
+          } else if (state.activeScreenId === 'screenContacts') {
+            const targetContact = state.filteredContacts[state.focusedCardIndex];
+            if (targetContact) openEmailModal(targetContact);
+            else switchScreen('screenFollowUps');
+          } else {
+            switchScreen('screenFollowUps');
           }
           break;
 
-        case '3': // Log call outcome
+        // [Key 3] LOG CALL OUTCOME (or switch to Logs tab)
+        case '3':
           if (!document.getElementById('callReturnPrompt').classList.contains('hidden')) {
             document.getElementById('btnPromptLog').click();
           } else if (state.activeScreenId === 'screenProfile') {
             document.getElementById('btnActionDisposition').click();
+          } else if (state.activeScreenId === 'screenContacts') {
+            const targetContact = state.filteredContacts[state.focusedCardIndex];
+            if (targetContact) openDispositionModal(targetContact);
+            else switchScreen('screenHistory');
+          } else {
+            switchScreen('screenHistory');
           }
           break;
 
-        case '4': // Prev contact
+        // [Key 4] PREV CONTACT (or switch to Config tab)
+        case '4':
           if (state.activeScreenId === 'screenProfile') {
             navigateProfile(-1);
+          } else {
+            switchScreen('screenSettings');
           }
           break;
 
-        case '5': // Search Focus
+        // [Key 5] or [*] SEARCH FOCUS
+        case '5':
+        case '*':
           e.preventDefault();
-          const sInput = document.getElementById('searchInput');
           if (state.activeScreenId !== 'screenContacts') {
             switchScreen('screenContacts');
           }
-          sInput.focus();
+          document.getElementById('searchInput').focus();
           break;
 
-        case '6': // Next contact
+        // [Key 6] NEXT CONTACT
+        case '6':
           if (state.activeScreenId === 'screenProfile') {
             navigateProfile(1);
           }
           break;
 
-        case '7': // Quick Edit Contact Details on the fly!
+        // [Key 7] QUICK EDIT DETAILS (On-the-fly)
+        case '7':
           if (state.activeScreenId === 'screenProfile' && state.currentContactIndex !== -1) {
             e.preventDefault();
             openEditContactModal(state.filteredContacts[state.currentContactIndex]);
+          } else if (state.activeScreenId === 'screenContacts') {
+            const targetContact = state.filteredContacts[state.focusedCardIndex];
+            if (targetContact) openEditContactModal(targetContact);
           }
           break;
 
-        case '0': // Back to contacts list
-          if (state.activeScreenId === 'screenProfile') {
-            switchScreen('screenContacts');
-          }
+        // [Key 8] or [#] CYCLE TABS / FILTER QUEUES
+        case '8':
+        case '#':
+          e.preventDefault();
+          cycleQueue(1);
           break;
 
-        case '9': // Quick CSV Import
+        // [Key 9] QUICK CSV IMPORT
+        case '9':
           document.getElementById('fileCsvInput').click();
           break;
 
-        case 'ArrowLeft':
-          if (state.activeScreenId === 'screenContacts') {
-            navigateQueuePills(-1);
-          } else if (state.activeScreenId === 'screenProfile') {
-            navigateProfile(-1);
-          }
-          break;
-
-        case 'ArrowRight':
-          if (state.activeScreenId === 'screenContacts') {
-            navigateQueuePills(1);
-          } else if (state.activeScreenId === 'screenProfile') {
-            navigateProfile(1);
+        // [Key 0] BACK TO LIST / TOP
+        case '0':
+          if (state.activeScreenId === 'screenProfile') {
+            switchScreen('screenContacts');
+          } else if (state.activeScreenId === 'screenContacts') {
+            state.focusedCardIndex = 0;
+            highlightCurrentCard(true);
           }
           break;
       }
     });
   }
 
-  function navigateQueuePills(dir) {
-    const pills = Array.from(document.querySelectorAll('.queue-pills .pill'));
+  function cycleQueue(dir) {
+    const pills = Array.from(document.querySelectorAll('.bubbly-queue-row .bubbly-pill'));
     const currentIdx = pills.findIndex(p => p.classList.contains('active'));
     let nextIdx = currentIdx + dir;
     if (nextIdx < 0) nextIdx = pills.length - 1;
@@ -1217,27 +1323,24 @@
     });
 
     // Queue tab pills
-    document.querySelectorAll('.queue-pills .pill').forEach(pill => {
+    document.querySelectorAll('.bubbly-queue-row .bubbly-pill').forEach(pill => {
       pill.addEventListener('click', (e) => {
-        document.querySelectorAll('.queue-pills .pill').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.bubbly-queue-row .bubbly-pill').forEach(p => p.classList.remove('active'));
         e.currentTarget.classList.add('active');
         state.activeQueue = e.currentTarget.dataset.queue;
+        state.focusedCardIndex = 0;
         applyFiltersAndRender();
       });
     });
 
-    // Main navigation tabs
-    document.querySelectorAll('.nav-tab').forEach(tab => {
-      tab.addEventListener('click', () => switchScreen(tab.dataset.screen));
+    // Bottom Navigation tab clicks
+    document.querySelectorAll('.dock-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchScreen(btn.dataset.screen));
     });
 
-    // Profile navigation
-    document.getElementById('btnBackToList').addEventListener('click', () => switchScreen('screenContacts'));
-    document.getElementById('btnPrevContact').addEventListener('click', () => navigateProfile(-1));
-    document.getElementById('btnNextContact').addEventListener('click', () => navigateProfile(1));
-
-    // Edit Contact Trigger
-    document.getElementById('btnEditContact').addEventListener('click', () => {
+    // Profile Context Dock Buttons
+    document.getElementById('btnProfileBack').addEventListener('click', () => switchScreen('screenContacts'));
+    document.getElementById('btnProfileEdit').addEventListener('click', () => {
       if (state.currentContactIndex !== -1) {
         openEditContactModal(state.filteredContacts[state.currentContactIndex]);
       }
@@ -1293,7 +1396,7 @@
       document.getElementById('modalEmail').classList.add('hidden');
     });
 
-    // Import events
+    // CSV Import events
     document.getElementById('btnQuickImport').addEventListener('click', () => {
       document.getElementById('fileCsvInput').click();
     });
@@ -1316,7 +1419,7 @@
       if (val > 0) {
         state.settings.dailyTargetCalls = val;
         await saveSettings();
-        await updateGamifiedMetrics();
+        await updateAmbientStatus();
         alert('Goal saved.');
       }
     });
