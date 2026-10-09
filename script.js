@@ -1,6 +1,7 @@
 /**
  * PERSONAL DIALER & CLIENT CONTACT MANAGEMENT
  * Compact Mobile & Hardware Keypad (CAT S22 Flip / D-Pad) Engine
+ * With On-The-Fly Contact Detail Editing (Key 7 / Enter)
  * British Racing Green & Gold Edition
  */
 
@@ -144,7 +145,7 @@
       email: ['email', 'email_address'],
       country: ['country', 'nation'],
       city: ['city', 'town'],
-      street_address: ['street_address', 'address', 'street'],
+      street_address: ['street_address', 'address', 'street', 'address_line_1'],
       postal_code: ['postal_code', 'zip', 'zip_code', 'postcode'],
       company: ['company', 'organisation', 'business', 'org'],
       job_title: ['job_title', 'title', 'role'],
@@ -351,7 +352,6 @@
       return l.type === 'call' && l.timestamp.slice(0, 10) === todayStr;
     }).length;
 
-    // Streak count
     const distinctCallDays = new Set(
       allLogs
         .filter(l => l.type === 'call')
@@ -377,7 +377,6 @@
 
     document.getElementById('streakCountText').textContent = `${streak}d`;
 
-    // Progress Ring (radius = 13, circumference ~ 81.68)
     const goal = state.settings.dailyTargetCalls || 10;
     const pct = Math.min(100, Math.round((callsToday / goal) * 100));
     
@@ -388,7 +387,6 @@
 
     document.getElementById('targetPercentLabel').textContent = `${pct}%`;
 
-    // Queue Clearance Banner
     const clearBanner = document.getElementById('queueClearBanner');
     if (dueToday === 0 && total > 0) {
       clearBanner.classList.remove('hidden');
@@ -548,6 +546,12 @@
       scheduleRelativeTime.textContent = 'Press 3 to log';
     }
 
+    // Location / Address
+    const addressStr = [contact.street_address, contact.city, contact.postal_code, contact.country]
+      .filter(Boolean)
+      .join(', ');
+    clone.querySelector('.bento-address-val').textContent = addressStr || 'No address registered.';
+
     // Notes
     clone.querySelector('.bento-notes-content').textContent = contact.notes || 'No notes added.';
 
@@ -612,7 +616,55 @@
     }
   }
 
-  // --- 9. Screen Navigation ---
+  // --- 9. On-the-Fly Contact Detail Editing (Key 7 / Button) ---
+  function openEditContactModal(contact) {
+    if (!contact) return;
+    document.getElementById('editContactId').value = contact.id;
+    document.getElementById('modalEditContactTitle').textContent = `Edit: ${contact.name}`;
+    document.getElementById('editName').value = contact.name || '';
+    document.getElementById('editPhone').value = contact.phone || '';
+    document.getElementById('editEmail').value = contact.email || '';
+    document.getElementById('editCompany').value = contact.company || '';
+    document.getElementById('editJobTitle').value = contact.job_title || '';
+    document.getElementById('editStreetAddress').value = contact.street_address || '';
+    document.getElementById('editCity').value = contact.city || '';
+    document.getElementById('editPostalCode').value = contact.postal_code || '';
+    document.getElementById('editCountry').value = contact.country || '';
+    document.getElementById('editNotes').value = contact.notes || '';
+
+    document.getElementById('modalEditContact').classList.remove('hidden');
+    document.getElementById('editName').focus();
+  }
+
+  async function handleEditContactSave(e) {
+    e.preventDefault();
+    const contactId = document.getElementById('editContactId').value;
+    const contact = state.contacts.find(c => c.id === contactId);
+    if (!contact) return;
+
+    // Update fields immediately
+    contact.name = document.getElementById('editName').value.trim() || 'Unnamed Contact';
+    contact.phone = document.getElementById('editPhone').value.trim();
+    contact.email = document.getElementById('editEmail').value.trim();
+    contact.company = document.getElementById('editCompany').value.trim();
+    contact.job_title = document.getElementById('editJobTitle').value.trim();
+    contact.street_address = document.getElementById('editStreetAddress').value.trim();
+    contact.city = document.getElementById('editCity').value.trim();
+    contact.postal_code = document.getElementById('editPostalCode').value.trim();
+    contact.country = document.getElementById('editCountry').value.trim();
+    contact.notes = document.getElementById('editNotes').value.trim();
+
+    await saveContact(contact);
+
+    document.getElementById('modalEditContact').classList.add('hidden');
+    applyFiltersAndRender();
+
+    if (state.currentContactIndex !== -1 && state.filteredContacts[state.currentContactIndex]?.id === contact.id) {
+      renderProfileView(contact);
+    }
+  }
+
+  // --- 10. Screen Navigation ---
   function switchScreen(targetScreenId) {
     state.activeScreenId = targetScreenId;
 
@@ -641,7 +693,7 @@
     }
   }
 
-  // --- 10. Call Return Detection via Page Visibility API ---
+  // --- 11. Call Return Detection via Page Visibility API ---
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && state.pendingCallContact) {
       const elapsed = Date.now() - state.lastCallTimestamp;
@@ -653,7 +705,7 @@
     }
   });
 
-  // --- 11. Call Disposition Logging Workflow ---
+  // --- 12. Call Disposition Logging Workflow ---
   function openDispositionModal(contact) {
     if (!contact) return;
     document.getElementById('dispContactId').value = contact.id;
@@ -697,7 +749,7 @@
     }
   }
 
-  // --- 12. Email Preparation Workflow ---
+  // --- 13. Email Preparation Workflow ---
   function openEmailModal(contact) {
     if (!contact || !contact.email) {
       alert('No email registered.');
@@ -761,7 +813,7 @@
     }
   }
 
-  // --- 13. Follow-Ups & History Views ---
+  // --- 14. Follow-Ups & History Views ---
   async function renderFollowUpsScreen() {
     const container = document.getElementById('followUpsList');
     const scheduled = state.contacts
@@ -830,7 +882,7 @@
     container.replaceChildren(fragment);
   }
 
-  // --- 14. Import CSV with Fast O(1) Map Deduplication ---
+  // --- 15. Import CSV with Fast Deduplication ---
   function handleCsvFileSelect(file) {
     if (!file) return;
     const reader = new FileReader();
@@ -939,14 +991,14 @@
     };
   }
 
-  // --- 15. Export & Restore ---
+  // --- 16. Export & Restore ---
   function exportContactsCsv() {
     if (state.contacts.length === 0) {
       alert('No contacts to export.');
       return;
     }
 
-    const headers = ['name', 'phone', 'email', 'company', 'job_title', 'notes', 'status'];
+    const headers = ['name', 'phone', 'email', 'company', 'job_title', 'street_address', 'city', 'postal_code', 'country', 'notes', 'status'];
     const rows = [headers.join(',')];
 
     state.contacts.forEach(c => {
@@ -1014,14 +1066,13 @@
     reader.readAsText(file);
   }
 
-  // --- 16. Hardware Keypad & D-Pad Keyboard Controller ---
+  // --- 17. Hardware Keypad & D-Pad Keyboard Controller ---
   function setupHardwareKeypadShortcuts() {
     window.addEventListener('keydown', (e) => {
-      // Allow regular typing inside text fields and textareas
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
       const isInputActive = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // Global Escape / Back key (CAT S22 Back key maps to Escape or Backspace)
+      // Global Escape / Back key
       if (e.key === 'Escape' || e.key === 'Backspace') {
         const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
         if (openModal) {
@@ -1045,7 +1096,7 @@
 
       // Keypad Shortcuts (1-9)
       switch (e.key) {
-        case '1': // Call active contact
+        case '1': // Call
           if (state.activeScreenId === 'screenProfile') {
             const callBtn = document.getElementById('btnActionCall');
             if (callBtn && callBtn.href && callBtn.href !== '#') {
@@ -1054,7 +1105,7 @@
           }
           break;
 
-        case '2': // Email active contact
+        case '2': // Email
           if (state.activeScreenId === 'screenProfile') {
             document.getElementById('btnActionEmail').click();
           }
@@ -1068,13 +1119,13 @@
           }
           break;
 
-        case '4': // Previous contact
+        case '4': // Prev contact
           if (state.activeScreenId === 'screenProfile') {
             navigateProfile(-1);
           }
           break;
 
-        case '5': // Quick focus search bar
+        case '5': // Search Focus
           e.preventDefault();
           const sInput = document.getElementById('searchInput');
           if (state.activeScreenId !== 'screenContacts') {
@@ -1089,7 +1140,14 @@
           }
           break;
 
-        case '0': // Return to contacts list
+        case '7': // Quick Edit Contact Details on the fly!
+          if (state.activeScreenId === 'screenProfile' && state.currentContactIndex !== -1) {
+            e.preventDefault();
+            openEditContactModal(state.filteredContacts[state.currentContactIndex]);
+          }
+          break;
+
+        case '0': // Back to contacts list
           if (state.activeScreenId === 'screenProfile') {
             switchScreen('screenContacts');
           }
@@ -1099,7 +1157,6 @@
           document.getElementById('fileCsvInput').click();
           break;
 
-        // D-Pad Left / Right tab switching on top level
         case 'ArrowLeft':
           if (state.activeScreenId === 'screenContacts') {
             navigateQueuePills(-1);
@@ -1128,7 +1185,7 @@
     pills[nextIdx].click();
   }
 
-  // --- 17. Initialization ---
+  // --- 18. Initialization ---
   async function initApp() {
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
@@ -1179,6 +1236,13 @@
     document.getElementById('btnPrevContact').addEventListener('click', () => navigateProfile(-1));
     document.getElementById('btnNextContact').addEventListener('click', () => navigateProfile(1));
 
+    // Edit Contact Trigger
+    document.getElementById('btnEditContact').addEventListener('click', () => {
+      if (state.currentContactIndex !== -1) {
+        openEditContactModal(state.filteredContacts[state.currentContactIndex]);
+      }
+    });
+
     document.getElementById('btnActionDisposition').addEventListener('click', () => {
       if (state.currentContactIndex !== -1) {
         openDispositionModal(state.filteredContacts[state.currentContactIndex]);
@@ -1190,6 +1254,15 @@
         openEmailModal(state.filteredContacts[state.currentContactIndex]);
       }
     });
+
+    // Edit Modal events
+    document.getElementById('btnCloseModalEdit').addEventListener('click', () => {
+      document.getElementById('modalEditContact').classList.add('hidden');
+    });
+    document.getElementById('btnCancelEdit').addEventListener('click', () => {
+      document.getElementById('modalEditContact').classList.add('hidden');
+    });
+    document.getElementById('formEditContact').addEventListener('submit', handleEditContactSave);
 
     // Disposition modal events
     document.getElementById('btnCloseModalDisp').addEventListener('click', () => {

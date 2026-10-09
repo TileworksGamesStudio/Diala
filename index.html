@@ -103,9 +103,12 @@
       <section id="screenProfile" class="screen-view hidden">
         <div class="profile-header-compact">
           <button id="btnBackToList" class="btn btn-subtle btn-sm" aria-label="Back to contacts">
-            <span class="key-badge">0</span> ← Back
+            <span class="key-badge">0</span> Back
           </button>
           <div class="profile-nav-arrows">
+            <button id="btnEditContact" class="btn btn-gold btn-sm" title="Edit Contact [Key 7]" aria-label="Edit Contact">
+              <span class="key-badge">7</span> Edit
+            </button>
             <button id="btnPrevContact" class="icon-btn gold-btn btn-sm" title="Previous Contact [Key 4]" aria-label="Previous Contact">
               <span class="key-badge">4</span> ◀
             </button>
@@ -204,7 +207,7 @@
       </section>
     </main>
 
-    <!-- Bottom Tab Navigation: High Contrast & D-Pad Accessible -->
+    <!-- Bottom Tab Navigation -->
     <nav class="app-nav" aria-label="Main Navigation">
       <button class="nav-tab active" data-screen="screenContacts" tabindex="0">
         <span class="tab-icon">👤</span>
@@ -223,6 +226,77 @@
         <span class="tab-label">Config</span>
       </button>
     </nav>
+
+    <!-- Modal: On-The-Fly Contact Editor [Key 7] -->
+    <div id="modalEditContact" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalEditContactTitle">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h2 id="modalEditContactTitle">Quick Edit Details</h2>
+          <button id="btnCloseModalEdit" class="btn-clear" aria-label="Close dialog">&times;</button>
+        </div>
+        <form id="formEditContact" class="modal-body">
+          <input type="hidden" id="editContactId">
+
+          <div class="form-group">
+            <label for="editName">Full Name *</label>
+            <input type="text" id="editName" class="form-control" required autocomplete="off">
+          </div>
+
+          <div class="form-group inline-row-equal">
+            <div>
+              <label for="editPhone">Phone Number</label>
+              <input type="tel" id="editPhone" class="form-control" autocomplete="off">
+            </div>
+            <div>
+              <label for="editEmail">Email</label>
+              <input type="email" id="editEmail" class="form-control" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-group inline-row-equal">
+            <div>
+              <label for="editCompany">Company</label>
+              <input type="text" id="editCompany" class="form-control" autocomplete="off">
+            </div>
+            <div>
+              <label for="editJobTitle">Role / Title</label>
+              <input type="text" id="editJobTitle" class="form-control" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="editStreetAddress">Street Address</label>
+            <input type="text" id="editStreetAddress" class="form-control" placeholder="123 High St" autocomplete="off">
+          </div>
+
+          <div class="form-group inline-row-equal">
+            <div>
+              <label for="editCity">City</label>
+              <input type="text" id="editCity" class="form-control" autocomplete="off">
+            </div>
+            <div>
+              <label for="editPostalCode">Postcode / Zip</label>
+              <input type="text" id="editPostalCode" class="form-control" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="editCountry">Country</label>
+            <input type="text" id="editCountry" class="form-control" autocomplete="off">
+          </div>
+
+          <div class="form-group">
+            <label for="editNotes">Notes &amp; Context</label>
+            <textarea id="editNotes" class="form-control" rows="3" placeholder="Key client notes..."></textarea>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="btnCancelEdit" class="btn btn-subtle">Cancel</button>
+            <button type="submit" class="btn btn-gold">Save Changes [Enter]</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- Modal: Call Outcome Logger -->
     <div id="modalDisposition" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modalDispTitle">
@@ -325,7 +399,7 @@
     </div>
   </div>
 
-  <!-- HTML Templates for High Speed Rendering -->
+  <!-- HTML Templates for Fast Safe Rendering -->
   <template id="tmpl-contact-card">
     <div class="contact-card" role="listitem" tabindex="0">
       <div class="contact-card-info">
@@ -382,6 +456,12 @@
           <span class="schedule-relative-time"></span>
         </div>
         <div class="schedule-date-text gold-text"></div>
+      </div>
+
+      <!-- Location / Office Address Card -->
+      <div class="glass-card">
+        <span class="card-caption">Location &amp; Office</span>
+        <p class="bento-address-val"></p>
       </div>
 
       <!-- Notes Memo Card -->

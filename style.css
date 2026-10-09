@@ -54,9 +54,7 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* ==========================================================================
-   Hardware D-Pad Accessible Focus Rings
-   ========================================================================== */
+/* Hardware D-Pad Accessible Focus Rings */
 :focus-visible, 
 .focused-dpad {
   outline: none !important;
@@ -65,9 +63,7 @@ body {
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-/* ==========================================================================
-   Layout Containers (Compact 480x640 Viewport Friendly)
-   ========================================================================== */
+/* Layout Containers */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -82,7 +78,7 @@ body {
   border-right: 1px solid var(--gold-trim-subtle);
 }
 
-/* Top Bar: Ultra Minimalist & Space Saving */
+/* Top Bar: Space-Saving Minimalist */
 .app-header {
   flex-shrink: 0;
   background-color: var(--bg-surface);
@@ -164,7 +160,7 @@ body {
 }
 .ring-indicator {
   stroke: var(--gold-primary);
-  stroke-dasharray: 81.68; /* 2 * PI * 13 */
+  stroke-dasharray: 81.68;
   stroke-dashoffset: 81.68;
   stroke-linecap: round;
   transition: stroke-dashoffset 0.3s ease;
@@ -217,9 +213,7 @@ body {
 }
 .queue-clear-banner.hidden { display: none !important; }
 
-/* ==========================================================================
-   Screen Body Viewport
-   ========================================================================== */
+/* Viewport */
 .app-body {
   flex: 1;
   position: relative;
@@ -246,9 +240,7 @@ body {
   margin-bottom: 8px;
 }
 
-/* ==========================================================================
-   Compact Search & Queue Pills
-   ========================================================================== */
+/* Search & Queue Pills */
 .compact-search-bar {
   display: flex;
   flex-direction: column;
@@ -315,9 +307,7 @@ body {
   border-color: var(--gold-bright);
 }
 
-/* ==========================================================================
-   Contact Cards & List Feed
-   ========================================================================== */
+/* Contacts List Feed */
 .contact-list {
   display: flex;
   flex-direction: column;
@@ -382,9 +372,7 @@ body {
 .badge-contacted { background: rgba(46, 204, 113, 0.2); color: #86efac; border-color: rgba(46, 204, 113, 0.4); }
 .badge-dnc { background: rgba(231, 76, 60, 0.2); color: #fca5a5; border-color: rgba(231, 76, 60, 0.4); }
 
-/* ==========================================================================
-   Small-Screen Bento Glass Profile Stack
-   ========================================================================== */
+/* Small-Screen Bento Glass Profile Stack */
 .profile-header-compact {
   display: flex;
   justify-content: space-between;
@@ -394,6 +382,7 @@ body {
 
 .profile-nav-arrows {
   display: flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -409,7 +398,6 @@ body {
   gap: 8px;
 }
 
-/* British Racing Green Glass Card */
 .glass-card {
   background: var(--glass-green);
   border: 1px solid var(--gold-trim-subtle);
@@ -508,6 +496,12 @@ body {
   color: var(--gold-bright);
 }
 
+.bento-address-val {
+  font-size: 0.82rem;
+  color: var(--gold-parchment);
+  margin-top: 3px;
+}
+
 .bento-notes-content {
   font-size: 0.8rem;
   line-height: 1.35;
@@ -521,9 +515,7 @@ body {
   color: var(--text-muted);
 }
 
-/* ==========================================================================
-   Keypad Sticky Bottom Action Dock (1: Call, 2: Email, 3: Log)
-   ========================================================================== */
+/* Keypad Sticky Bottom Action Dock */
 .bottom-action-dock {
   position: absolute;
   bottom: calc(48px + var(--safe-bottom));
@@ -555,7 +547,6 @@ body {
   position: relative;
 }
 
-/* Keypad Badge Indicator */
 .key-badge {
   background: rgba(0, 0, 0, 0.4);
   color: var(--gold-bright);
@@ -584,9 +575,7 @@ body {
   border-color: var(--gold-primary);
 }
 
-/* ==========================================================================
-   Bottom Navigation Tabs
-   ========================================================================== */
+/* Bottom Navigation Tabs */
 .app-nav {
   position: absolute;
   bottom: 0;
@@ -627,9 +616,7 @@ body {
   background: rgba(212, 175, 55, 0.08);
 }
 
-/* ==========================================================================
-   Modals & Controls
-   ========================================================================== */
+/* Modals & Forms */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -649,10 +636,10 @@ body {
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   width: 100%;
   max-width: 480px;
-  max-height: 85vh;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  padding: 10px 12px;
   padding-bottom: calc(16px + var(--safe-bottom));
 }
 
@@ -662,7 +649,7 @@ body {
   align-items: center;
   margin-bottom: 8px;
 }
-.modal-header h2 { font-size: 1rem; color: var(--gold-parchment); }
+.modal-header h2 { font-size: 0.95rem; color: var(--gold-parchment); }
 
 .modal-body {
   overflow-y: auto;
@@ -674,14 +661,20 @@ body {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .form-group label {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
 }
 .form-group.inline-row {
   flex-direction: row;
+}
+
+.inline-row-equal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 
 .form-control {
@@ -692,6 +685,7 @@ body {
   color: var(--text-main);
   font-size: 0.85rem;
   font-family: inherit;
+  width: 100%;
 }
 .form-control:focus {
   border-color: var(--gold-primary);
@@ -709,9 +703,9 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
-  min-height: 38px;
+  min-height: 36px;
 }
-.btn-sm { min-height: 32px; padding: 4px 8px; font-size: 0.75rem; }
+.btn-sm { min-height: 30px; padding: 4px 8px; font-size: 0.75rem; }
 .btn-block { width: 100%; }
 
 .btn-gold {
@@ -748,7 +742,6 @@ body {
   margin-top: 8px;
 }
 
-/* Call Prompt Banner */
 .call-prompt {
   background: var(--bg-surface-elevated);
   border-bottom: 1px solid var(--gold-primary);
@@ -764,7 +757,6 @@ body {
 }
 .prompt-actions { display: flex; gap: 6px; }
 
-/* History Card */
 .history-item {
   background: var(--bg-deep);
   border: 1px solid var(--gold-trim-subtle);
