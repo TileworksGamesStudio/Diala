@@ -18,7 +18,7 @@
       id: 'intro',
       title: 'Introduction',
       subject: 'Great speaking earlier – CannaGames resources for {company}',
-      body: 'Hi {first_name},\n\nThank you for taking the time to speak with me earlier. I really appreciate the opportunity to introduce myself to {company}.\n\nTo recap: my name is Christian John, founder of Tileworks Studio. I’m developing a free educational web app that helps improve cannabis knowledge through fun, engaging puzzle games.\n\nThe aim is to improve cannabis education, focusing on the plant, products, science, strains, and the wider world of cannabis. By helping staff become confident, knowledgeable educators, we can build customer trust, improve experiences, and nurture a stronger culture of learning within the workplace.\n\nCannaGames is completely free, with no adverts, no personal data collection, and no payments required.\n\nYou can explore the app here:\n<a href="https://tileworksgamesstudio.github.io/CannaGames-Home/">https://tileworksgamesstudio.github.io/CannaGames-Home/</a>\n\nI’d really appreciate your support in helping the project reach your team. Sharing the app with your staff, encouraging them to try it, or passing it on to other businesses that may benefit would make a real difference. Any feedback would also be greatly appreciated.\n\nOur goal is to keep cannabis education accessible to everyone. Optional donations help us maintain the ad-free app and fund future updates and educational content:\n<a href="https://buy.stripe.com/14AbJ0czm3Ct3ARdPgefC0U">https://buy.stripe.com/14AbJ0czm3Ct3ARdPgefC0U</a>\n\nThank you again for your time. I hope CannaGames can be a useful resource for your team and the wider cannabis industry.\n\nKind regards,\n\nChristian John\nFounder, Tileworks Studio'
+      body: 'Hi {first_name},\n\nThank you for taking the time to speak with me earlier. I really appreciate the opportunity to introduce myself to {company}.\n\nTo recap: my name is Christian John, founder of Tileworks Studio. I’m developing a free educational web app that helps improve cannabis knowledge through fun, engaging puzzle games.\n\nThe aim is to improve cannabis education, focusing on the plant, products, science, strains, and the wider world of cannabis. By helping staff become confident, knowledgeable educators, we can build customer trust, improve experiences, and nurture a stronger culture of learning within the workplace.\n\nCannaGames is completely free, with no adverts, no personal data collection, and no payments required.\n\nYou can explore the app here:\nhttps://tileworksgamesstudio.github.io/CannaGames-Home/\n\nI’d really appreciate your support in helping the project reach your team. Sharing the app with your staff, encouraging them to try it, or passing it on to other businesses that may benefit would make a real difference. Any feedback would also be greatly appreciated.\n\nOur goal is to keep cannabis education accessible to everyone. Optional donations help us maintain the ad-free app and fund future updates and educational content:\nhttps://buy.stripe.com/14AbJ0czm3Ct3ARdPgefC0U\n\nThank you again for your time. I hope CannaGames can be a useful resource for your team and the wider cannabis industry.\n\nKind regards,\n\nChristian John\nFounder, Tileworks Studio'
     },
     followup: {
       id: 'followup',
@@ -207,6 +207,14 @@
     return hasPlus ? `+${digits}` : digits;
   }
 
+  function cleanBodyForEmailClient(text) {
+    if (!text) return '';
+    // If any HTML <a> tags were entered or stored, convert them cleanly to URLs
+    return text
+      .replace(/<a\s+(?:[^>]*?\s+)?href=["']([^"']+)["'][^>]*>.*?<\/a>/gi, '$1')
+      .replace(/<[^>]+>/g, '');
+  }
+
   function getInitials(primaryStr, fallbackStr) {
     const target = (primaryStr || fallbackStr || '?').trim();
     const parts = target.split(/\s+/);
@@ -297,9 +305,23 @@
           }
         }
 
-        // Automatic upgrade to hyperlinked template if older unlinked or default template is stored
-        if (!state.emailTemplates.intro || !state.emailTemplates.intro.body.includes('<a href=')) {
-          state.emailTemplates.intro = DEFAULT_EMAIL_TEMPLATES.intro;
+        // Auto-heal: Purge any raw HTML tags from stored templates to fix mail client rendering
+        let changed = false;
+        if (state.emailTemplates.intro) {
+          if (state.emailTemplates.intro.body.includes('<a href=') || !state.emailTemplates.intro.body.includes('CannaGames')) {
+            state.emailTemplates.intro = DEFAULT_EMAIL_TEMPLATES.intro;
+            changed = true;
+          }
+        }
+
+        Object.keys(state.emailTemplates).forEach(k => {
+          if (state.emailTemplates[k].body && state.emailTemplates[k].body.includes('<a href=')) {
+            state.emailTemplates[k].body = cleanBodyForEmailClient(state.emailTemplates[k].body);
+            changed = true;
+          }
+        });
+
+        if (changed) {
           await persistSettings();
         }
 
@@ -696,7 +718,7 @@
       .replace('{first_name}', firstName)
       .replace('{company}', comp);
 
-    const body = t.body
+    const body = cleanBodyForEmailClient(t.body)
       .replace('{name}', contact.name || '')
       .replace('{first_name}', firstName)
       .replace('{company}', comp)
@@ -709,14 +731,16 @@
   function launchMailtoNative(contact) {
     const to = encodeURIComponent(contact.email);
     const sub = encodeURIComponent(document.getElementById('draftSubject').value);
-    const body = encodeURIComponent(document.getElementById('draftBody').value);
+    const cleanBody = cleanBodyForEmailClient(document.getElementById('draftBody').value);
+    const body = encodeURIComponent(cleanBody);
     window.location.href = `mailto:${to}?subject=${sub}&body=${body}`;
   }
 
   function launchGmailWebTab(contact) {
     const to = encodeURIComponent(contact.email);
     const sub = encodeURIComponent(document.getElementById('draftSubject').value);
-    const body = encodeURIComponent(document.getElementById('draftBody').value);
+    const cleanBody = cleanBodyForEmailClient(document.getElementById('draftBody').value);
+    const body = encodeURIComponent(cleanBody);
     window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${sub}&body=${body}`, '_blank');
   }
 
@@ -1108,7 +1132,7 @@
     const loadTemplateToSettings = (id) => {
       const t = state.emailTemplates[id] || state.emailTemplates.intro;
       document.getElementById('templateSubject').value = t.subject;
-      document.getElementById('templateBody').value = t.body;
+      document.getElementById('templateBody').value = cleanBodyForEmailClient(t.body);
     };
 
     tmplSelect.onchange = (e) => loadTemplateToSettings(e.target.value);
@@ -1118,7 +1142,7 @@
       const id = tmplSelect.value;
       if (state.emailTemplates[id]) {
         state.emailTemplates[id].subject = document.getElementById('templateSubject').value;
-        state.emailTemplates[id].body = document.getElementById('templateBody').value;
+        state.emailTemplates[id].body = cleanBodyForEmailClient(document.getElementById('templateBody').value);
         await persistSettings();
         alert('Template saved!');
       }
