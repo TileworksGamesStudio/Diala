@@ -3,458 +3,371 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Ultra-compact, bubbly British Racing Green and Gold dialler optimized for flip phones.">
-  <meta name="theme-color" content="#03150c">
-  <link rel="manifest" href="manifest.json">
-  <title>Dialler &amp; Client Manager</title>
+  <meta name="description" content="Chunky, high-contrast British Racing Green & Gold personal dialer for flip phones.">
+  <meta name="theme-color" content="#020d07">
+  <title>FlipDialler Pro</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app" class="app-container">
-    
-    <!-- Micro Ambient Status Strip (Zero bulk, maximum vertical space) -->
-    <header class="micro-status-bar" role="banner">
-      <div class="status-left">
-        <span class="gold-pip">✦</span>
-        <span id="activeScreenTitle" class="screen-crumb">Contacts</span>
+
+    <!-- 1. Ambient Micro Telemetry HUD -->
+    <header class="hud-bar" role="banner">
+      <div class="hud-left">
+        <span class="hud-gold-emblem">✦</span>
+        <span id="activeScreenTitle" class="hud-title">FRESH</span>
       </div>
-      <div class="status-right">
-        <div class="micro-badge" id="hudStreak" title="Daily streak">
-          <span class="flame">🔥</span>
-          <span id="streakCountText">0d</span>
+      <div class="hud-right">
+        <div class="hud-pill" title="Daily calls">
+          <span class="hud-icon">🔥</span>
+          <span id="hudCallCount">0/10</span>
         </div>
-        <div class="micro-badge" id="hudDue" title="Follow-ups due today">
-          <span class="due-dot"></span>
-          <span id="dueCounterText">0 due</span>
+        <div class="hud-pill" title="Callbacks due">
+          <span class="hud-dot-warning"></span>
+          <span id="hudDueCount">0 Due</span>
         </div>
-        <button id="btnQuickImport" class="micro-key-btn" title="Press 9 for Import" aria-label="Import">
-          <span class="k-hint">9</span> CSV
-        </button>
       </div>
     </header>
 
-    <!-- Global Floating Call Return Banner -->
-    <aside id="callReturnPrompt" class="call-return-toast hidden" aria-live="polite">
-      <div class="toast-body">
-        <span id="callPromptText">Log call?</span>
-        <div class="toast-buttons">
-          <button id="btnPromptLog" class="btn btn-gold btn-xs"><span class="k-badge">3</span> Log</button>
-          <button id="btnPromptDismiss" class="btn btn-subtle btn-xs"><span class="k-badge">0</span> Skip</button>
-        </div>
-      </div>
-    </aside>
+    <!-- 2. Main Viewport -->
+    <main class="app-viewport" id="appViewport">
 
-    <!-- Main Screens Viewport (Zero wasted header height) -->
-    <main class="app-body" id="appBody">
-
-      <!-- ================= 1. CONTACTS SCREEN ================= -->
+      <!-- ================= SCREEN: CONTACTS LIST ================= -->
       <section id="screenContacts" class="screen-view active">
-        <!-- Bubbly Floating Action & Search Strip -->
-        <div class="bubbly-control-strip">
-          <div class="search-bubble">
-            <span class="search-k-icon">🔍</span>
-            <input type="search" id="searchInput" placeholder="Search... [Key 5 / *]" autocomplete="off">
-            <button id="btnClearSearch" class="btn-clear hidden" aria-label="Clear">&times;</button>
-          </div>
-          <!-- Filter Queue Pills with Key 8 Cycling -->
-          <div class="bubbly-queue-row" role="tablist">
-            <button class="bubbly-pill active" data-queue="all" role="tab"><span class="k-inline">8</span> All</button>
-            <button class="bubbly-pill" data-queue="due" role="tab">Due</button>
-            <button class="bubbly-pill" data-queue="new" role="tab">New</button>
-            <button class="bubbly-pill" data-queue="recent" role="tab">Done</button>
-          </div>
+        <!-- Pipeline Stage Ribbon -->
+        <div class="stage-ribbon" role="tablist">
+          <button class="stage-tab active" data-queue="uncontacted" role="tab">
+            <span class="key-badge">7</span> Fresh (<span id="countUncontacted">0</span>)
+          </button>
+          <button class="stage-tab" data-queue="callback" role="tab">
+            <span class="key-badge">8</span> Call Back (<span id="countCallback">0</span>)
+          </button>
+          <button class="stage-tab" data-queue="contacted" role="tab">
+            <span class="key-badge">9</span> Contacted (<span id="countContacted">0</span>)
+          </button>
+          <button class="stage-tab" data-queue="all" role="tab">
+            All
+          </button>
         </div>
 
-        <!-- Bubbly Contact List Feed -->
-        <div id="contactList" class="bubbly-contact-list" role="list">
-          <div class="empty-state-bubble">
-            <p>No contacts available</p>
-            <button id="btnEmptyImportTrigger" class="btn btn-gold btn-sm"><span class="k-badge">9</span> Import CSV</button>
-          </div>
+        <!-- Search Bar -->
+        <div class="search-bubble">
+          <span class="search-icon">🔍</span>
+          <input type="search" id="searchInput" placeholder="Search... [Key 5 or *]" autocomplete="off">
+          <button id="btnClearSearch" class="btn-clear hidden">&times;</button>
         </div>
+
+        <!-- Chunky Contact Cards List -->
+        <div id="contactList" class="bento-card-list" role="list"></div>
       </section>
 
-      <!-- ================= 2. PROFILE SCREEN ================= -->
+      <!-- ================= SCREEN: CALL COCKPIT (PROFILE) ================= -->
       <section id="screenProfile" class="screen-view hidden">
-        <div class="profile-flow-container">
-          <!-- Populated dynamically via Template -->
-          <div id="profileDetails" class="bubbly-profile-scroll"></div>
+        <div id="profileCockpit" class="cockpit-container">
+          <!-- Injected via tmpl-cockpit -->
         </div>
       </section>
 
-      <!-- ================= 3. FOLLOW-UPS SCREEN ================= -->
-      <section id="screenFollowUps" class="screen-view hidden">
-        <div class="screen-micro-header">
-          <h2>Scheduled Follow-Ups</h2>
-          <span class="header-k-hint">[Key 8 to cycle]</span>
-        </div>
-        <div id="followUpsList" class="bubbly-contact-list"></div>
-      </section>
-
-      <!-- ================= 4. HISTORY SCREEN ================= -->
+      <!-- ================= SCREEN: LOGS ================= -->
       <section id="screenHistory" class="screen-view hidden">
-        <div class="screen-micro-header">
-          <h2>Interaction History</h2>
-          <span class="header-k-hint">Recent Calls &amp; Notes</span>
+        <div class="section-title-strip">
+          <h2>Audit &amp; Interaction Logs</h2>
         </div>
-        <div id="globalHistoryList" class="bubbly-history-list"></div>
+        <div id="globalHistoryList" class="history-card-list"></div>
       </section>
 
-      <!-- ================= 5. SETTINGS SCREEN ================= -->
+      <!-- ================= SCREEN: SETTINGS & TEMPLATES ================= -->
       <section id="screenSettings" class="screen-view hidden">
-        <div class="bubbly-card">
-          <h3 class="bubbly-title">Daily Call Goal</h3>
-          <div class="inline-field-group">
-            <input type="number" id="inputDailyCallTarget" min="1" max="100" class="bubbly-input" value="10">
-            <button id="btnSaveTargetGoal" class="btn btn-gold btn-sm">Save</button>
+        <div class="bento-box">
+          <h3 class="bento-box-title">Daily Call Target</h3>
+          <div class="flex-row">
+            <input type="number" id="inputDailyCallTarget" min="1" max="150" class="chunky-input" value="10">
+            <button id="btnSaveTarget" class="btn btn-gold btn-sm">Save</button>
           </div>
         </div>
 
-        <div class="bubbly-card">
-          <h3 class="bubbly-title">Import Contacts CSV</h3>
-          <input type="file" id="fileCsvInput" accept=".csv,text/csv,text/plain" class="file-input-field">
-          <label for="fileCsvInput" class="btn btn-gold btn-block"><span class="k-badge">9</span> Select CSV File</label>
+        <div class="bento-box">
+          <h3 class="bento-box-title">Import Leads CSV</h3>
+          <input type="file" id="fileCsvInput" accept=".csv,text/csv,text/plain" class="hidden-input">
+          <label for="fileCsvInput" class="btn btn-gold btn-block">
+            <span class="key-badge">#</span> Select CSV File
+          </label>
         </div>
 
-        <div class="bubbly-card">
-          <h3 class="bubbly-title">Email Copy Template</h3>
+        <div class="bento-box">
+          <h3 class="bento-box-title">Active Email Templates</h3>
+          <div class="form-group">
+            <label for="templateSelector">Choose Template to Edit</label>
+            <select id="templateSelector" class="chunky-input"></select>
+          </div>
           <div class="form-group">
             <label for="templateSubject">Subject</label>
-            <input type="text" id="templateSubject" class="bubbly-input">
+            <input type="text" id="templateSubject" class="chunky-input">
           </div>
           <div class="form-group">
             <label for="templateBody">Body</label>
-            <textarea id="templateBody" class="bubbly-input" rows="3"></textarea>
+            <textarea id="templateBody" class="chunky-input" rows="4"></textarea>
           </div>
           <button id="btnSaveTemplate" class="btn btn-gold btn-sm">Save Template</button>
         </div>
 
-        <div class="bubbly-card">
-          <h3 class="bubbly-title">Backup &amp; Migration</h3>
+        <div class="bento-box">
+          <h3 class="bento-box-title">Data Management</h3>
           <div class="btn-stack">
-            <button id="btnExportCsv" class="btn btn-subtle btn-sm">Export CSV</button>
-            <button id="btnExportJsonBackup" class="btn btn-subtle btn-sm">Export JSON</button>
-            <label for="fileJsonRestore" class="btn btn-subtle btn-sm file-input-label">Restore JSON</label>
-            <input type="file" id="fileJsonRestore" accept=".json,application/json" class="file-input-field">
+            <button id="btnExportCsv" class="btn btn-subtle btn-sm">Export Contacts CSV</button>
+            <button id="btnExportJson" class="btn btn-subtle btn-sm">Export Full Backup (JSON)</button>
+            <label for="fileJsonRestore" class="btn btn-subtle btn-sm text-center">Restore JSON</label>
+            <input type="file" id="fileJsonRestore" accept=".json,application/json" class="hidden-input">
           </div>
         </div>
 
-        <div class="bubbly-card danger-bubble">
-          <button id="btnClearAllData" class="btn btn-danger btn-block">Wipe All Local Data</button>
+        <div class="bento-box danger-box">
+          <button id="btnClearAllData" class="btn btn-danger btn-block">Purge All Database Leads</button>
         </div>
       </section>
-
     </main>
 
-    <!-- Permanent Ultra-Slim Bottom Keypad Dock (Only 36px high!) -->
-    <footer class="app-dock" role="navigation">
+    <!-- 3. Permanent Non-Overlapping Bottom Dock -->
+    <footer class="app-dock">
       <div id="dockDefaultView" class="dock-row">
-        <button class="dock-btn active" data-screen="screenContacts" tabindex="0">
-          <span class="dock-lbl">1:Contacts</span>
+        <button class="dock-item active" data-screen="screenContacts">
+          <span class="d-key">0</span> Leads
         </button>
-        <button class="dock-btn" data-screen="screenFollowUps" tabindex="0">
-          <span class="dock-lbl">2:Due</span>
+        <button class="dock-item" data-screen="screenHistory">
+          <span class="d-key">4</span> Logs
         </button>
-        <button class="dock-btn" data-screen="screenHistory" tabindex="0">
-          <span class="dock-lbl">3:Logs</span>
-        </button>
-        <button class="dock-btn" data-screen="screenSettings" tabindex="0">
-          <span class="dock-lbl">4:Config</span>
+        <button class="dock-item" data-screen="screenSettings">
+          <span class="d-key">6</span> Setup
         </button>
       </div>
 
-      <!-- Contextual Profile Dock: Overlays automatically when a contact profile is open -->
+      <!-- Quick Context Profile Bar -->
       <div id="dockProfileView" class="dock-row hidden">
-        <a id="btnActionCall" href="#" class="dock-action-btn call-btn">
-          <span class="d-key">1</span> Call
-        </a>
-        <button id="btnActionEmail" class="dock-action-btn email-btn">
-          <span class="d-key">2</span> Mail
-        </button>
-        <button id="btnActionDisposition" class="dock-action-btn log-btn">
-          <span class="d-key">3</span> Log
-        </button>
-        <button id="btnProfileEdit" class="dock-action-btn edit-btn">
-          <span class="d-key">7</span> Edit
-        </button>
-        <button id="btnProfileBack" class="dock-action-btn back-btn">
+        <button id="btnDockBack" class="dock-action-btn dock-back">
           <span class="d-key">0</span> Back
+        </button>
+        <button id="btnDockEdit" class="dock-action-btn dock-edit">
+          <span class="d-key">6</span> Edit Details
         </button>
       </div>
     </footer>
 
-    <!-- ================= MODALS ================= -->
+    <!-- ================= MODALS & DRAWERS ================= -->
 
-    <!-- Modal 1: On-The-Fly Quick Edit Sheet [Key 7] -->
-    <div id="modalEditContact" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-      <div class="modal-bubbly-sheet">
-        <div class="modal-sheet-head">
-          <h2 id="modalEditContactTitle">Edit Contact</h2>
-          <button id="btnCloseModalEdit" class="btn-clear" aria-label="Close">&times;</button>
+    <!-- Quick Call-Back Scheduler Drawer -->
+    <div id="modalScheduleCallback" class="modal-sheet-backdrop hidden">
+      <div class="modal-sheet">
+        <div class="sheet-head">
+          <h3>Set Call Back Time</h3>
+          <button id="btnCloseCallbackSheet" class="btn-clear">&times;</button>
         </div>
-        <form id="formEditContact" class="modal-sheet-body">
+        <div class="sheet-body">
+          <div class="quick-choice-grid">
+            <button class="btn btn-choice" data-hours="2"><span class="key-badge">1</span> In 2 Hours</button>
+            <button class="btn btn-choice" data-hours="4"><span class="key-badge">2</span> In 4 Hours</button>
+            <button class="btn btn-choice" data-hours="24"><span class="key-badge">3</span> Tomorrow</button>
+            <button class="btn btn-choice" data-hours="48"><span class="key-badge">4</span> In 2 Days</button>
+            <button class="btn btn-choice" data-hours="168"><span class="key-badge">5</span> Next Week</button>
+          </div>
+          <div class="form-group mt-2">
+            <label for="customCallbackInput">Or pick custom date &amp; time:</label>
+            <input type="datetime-local" id="customCallbackInput" class="chunky-input">
+          </div>
+          <div class="sheet-foot flex-row mt-2">
+            <button id="btnCancelCallback" class="btn btn-subtle btn-block"><span class="key-badge">0</span> Cancel</button>
+            <button id="btnConfirmCallbackSchedule" class="btn btn-gold btn-block">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Email Launch Sheet -->
+    <div id="modalEmailPicker" class="modal-sheet-backdrop hidden">
+      <div class="modal-sheet">
+        <div class="sheet-head">
+          <h3>Send Rapid Email</h3>
+          <button id="btnCloseEmailSheet" class="btn-clear">&times;</button>
+        </div>
+        <div class="sheet-body">
+          <div class="form-group">
+            <label for="pickerTemplateSelect">Template</label>
+            <select id="pickerTemplateSelect" class="chunky-input"></select>
+          </div>
+          <div class="form-group">
+            <label for="draftSubject">Subject</label>
+            <input type="text" id="draftSubject" class="chunky-input">
+          </div>
+          <div class="form-group">
+            <label for="draftBody">Message</label>
+            <textarea id="draftBody" class="chunky-input" rows="4"></textarea>
+          </div>
+          <div class="btn-grid-2">
+            <button id="btnLaunchMailtoApp" class="btn btn-gold btn-block"><span class="key-badge">1</span> Open Mail App</button>
+            <button id="btnLaunchWebGmail" class="btn btn-subtle btn-block"><span class="key-badge">2</span> Gmail Web</button>
+          </div>
+          <div class="btn-grid-2 mt-2">
+            <button id="btnCancelEmail" class="btn btn-subtle btn-block"><span class="key-badge">0</span> Cancel</button>
+            <button id="btnMarkEmailLogged" class="btn btn-emerald btn-block"><span class="key-badge">3</span> Log Sent</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Contact Modal -->
+    <div id="modalEditContact" class="modal-sheet-backdrop hidden">
+      <div class="modal-sheet">
+        <div class="sheet-head">
+          <h3 id="editModalHeading">Edit Contact</h3>
+          <button id="btnCloseEditSheet" class="btn-clear">&times;</button>
+        </div>
+        <form id="formEditContact" class="sheet-body">
           <input type="hidden" id="editContactId">
-
           <div class="form-group">
-            <label for="editName">Full Name *</label>
-            <input type="text" id="editName" class="bubbly-input" required autocomplete="off">
+            <label for="editCompany">Business / Company Name</label>
+            <input type="text" id="editCompany" class="chunky-input" autocomplete="off">
           </div>
-
-          <div class="form-row-2">
-            <div>
-              <label for="editPhone">Phone Number</label>
-              <input type="tel" id="editPhone" class="bubbly-input" autocomplete="off">
+          <div class="form-group">
+            <label for="editName">Contact Full Name</label>
+            <input type="text" id="editName" class="chunky-input" autocomplete="off">
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="editPhone">Phone</label>
+              <input type="tel" id="editPhone" class="chunky-input" autocomplete="off">
             </div>
-            <div>
+            <div class="form-group">
               <label for="editEmail">Email</label>
-              <input type="email" id="editEmail" class="bubbly-input" autocomplete="off">
+              <input type="email" id="editEmail" class="chunky-input" autocomplete="off">
             </div>
           </div>
-
-          <div class="form-row-2">
-            <div>
-              <label for="editCompany">Company</label>
-              <input type="text" id="editCompany" class="bubbly-input" autocomplete="off">
-            </div>
-            <div>
-              <label for="editJobTitle">Role / Title</label>
-              <input type="text" id="editJobTitle" class="bubbly-input" autocomplete="off">
-            </div>
-          </div>
-
           <div class="form-group">
-            <label for="editStreetAddress">Street Address</label>
-            <input type="text" id="editStreetAddress" class="bubbly-input" placeholder="e.g. 10 Downing St" autocomplete="off">
+            <label for="editJobTitle">Role / Title</label>
+            <input type="text" id="editJobTitle" class="chunky-input" autocomplete="off">
           </div>
-
-          <div class="form-row-2">
-            <div>
-              <label for="editCity">City</label>
-              <input type="text" id="editCity" class="bubbly-input" autocomplete="off">
-            </div>
-            <div>
-              <label for="editPostalCode">Postcode / Zip</label>
-              <input type="text" id="editPostalCode" class="bubbly-input" autocomplete="off">
-            </div>
-          </div>
-
           <div class="form-group">
-            <label for="editCountry">Country</label>
-            <input type="text" id="editCountry" class="bubbly-input" autocomplete="off">
+            <label for="editNotes">Notes</label>
+            <textarea id="editNotes" class="chunky-input" rows="2"></textarea>
           </div>
-
-          <div class="form-group">
-            <label for="editNotes">Notes &amp; Context</label>
-            <textarea id="editNotes" class="bubbly-input" rows="2" placeholder="Key points..."></textarea>
-          </div>
-
-          <div class="modal-sheet-foot">
-            <button type="button" id="btnCancelEdit" class="btn btn-subtle btn-sm"><span class="k-badge">0</span> Cancel</button>
-            <button type="submit" class="btn btn-gold btn-sm"><span class="k-badge">↵</span> Save</button>
+          <div class="sheet-foot flex-row">
+            <button type="button" id="btnCancelEdit" class="btn btn-subtle btn-block"><span class="key-badge">0</span> Cancel</button>
+            <button type="submit" class="btn btn-gold btn-block">Save Changes</button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <!-- Modal 2: Disposition & Call Logger Sheet [Key 3] -->
-    <div id="modalDisposition" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-      <div class="modal-bubbly-sheet">
-        <div class="modal-sheet-head">
-          <h2 id="modalDispTitle">Log Call</h2>
-          <button id="btnCloseModalDisp" class="btn-clear" aria-label="Close">&times;</button>
-        </div>
-        <form id="formDisposition" class="modal-sheet-body">
-          <input type="hidden" id="dispContactId">
-          
-          <div class="form-group">
-            <label for="dispOutcome">Outcome</label>
-            <select id="dispOutcome" class="bubbly-input" required>
-              <option value="Spoke — interested">Spoke — interested</option>
-              <option value="Callback requested">Callback requested</option>
-              <option value="Voicemail left">Voicemail left</option>
-              <option value="No answer">No answer</option>
-              <option value="Spoke — not interested">Spoke — not interested</option>
-              <option value="Email requested">Email requested</option>
-              <option value="Follow-up required">Follow-up required</option>
-              <option value="Wrong number">Wrong number</option>
-              <option value="Do not contact">Do not contact</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="dispNote">Notes</label>
-            <textarea id="dispNote" class="bubbly-input" rows="2" placeholder="Log notes..."></textarea>
-          </div>
-
-          <div class="form-group">
-            <label for="dispFollowUpDate">Next Follow-Up</label>
-            <input type="datetime-local" id="dispFollowUpDate" class="bubbly-input">
-          </div>
-
-          <div class="modal-sheet-foot">
-            <button type="button" id="btnCancelDisp" class="btn btn-subtle btn-sm"><span class="k-badge">0</span> Cancel</button>
-            <button type="submit" class="btn btn-gold btn-sm"><span class="k-badge">↵</span> Save</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Modal 3: Fast Email Sender Sheet [Key 2] -->
-    <div id="modalEmail" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-      <div class="modal-bubbly-sheet">
-        <div class="modal-sheet-head">
-          <h2 id="modalEmailTitle">Draft Email</h2>
-          <button id="btnCloseModalEmail" class="btn-clear" aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-sheet-body">
-          <div class="form-group">
-            <input type="email" id="emailTo" class="bubbly-input" readonly>
-          </div>
-          <div class="form-group">
-            <input type="text" id="emailSubject" class="bubbly-input" placeholder="Subject">
-          </div>
-          <div class="form-group">
-            <textarea id="emailBody" class="bubbly-input" rows="3"></textarea>
-          </div>
-          <div class="btn-stack">
-            <button id="btnLaunchMailto" class="btn btn-gold btn-sm">Open Mail App</button>
-            <button id="btnLaunchGmailWeb" class="btn btn-subtle btn-sm">Open Web Gmail</button>
-          </div>
-          <div id="emailConfirmNotice" class="email-confirm-bubble hidden">
-            <p>Did you send this email?</p>
-            <div class="row-flex">
-              <button id="btnConfirmEmailSent" class="btn btn-gold btn-xs">Yes, Log It</button>
-              <button id="btnCancelEmailSent" class="btn btn-subtle btn-xs">Cancel</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal 4: CSV Review Sheet [Key 9] -->
-    <div id="modalImportReview" class="modal-backdrop hidden" role="dialog" aria-modal="true">
-      <div class="modal-bubbly-sheet">
-        <div class="modal-sheet-head">
-          <h2 id="modalImportTitle">Import Review</h2>
-          <button id="btnCloseModalImport" class="btn-clear" aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-sheet-body">
-          <div id="importSummaryDetails" class="bubbly-card"></div>
-          <div class="form-group">
-            <label for="importDuplicateStrategy">Duplicate Rule</label>
-            <select id="importDuplicateStrategy" class="bubbly-input">
-              <option value="skip">Skip duplicates</option>
-              <option value="overwrite">Overwrite existing</option>
-              <option value="keepBoth">Keep both</option>
-            </select>
-          </div>
-          <div class="modal-sheet-foot">
-            <button id="btnCancelImport" class="btn btn-subtle btn-sm"><span class="k-badge">0</span> Cancel</button>
-            <button id="btnCommitImport" class="btn btn-gold btn-sm"><span class="k-badge">↵</span> Import</button>
-          </div>
-        </div>
       </div>
     </div>
 
   </div>
 
-  <!-- ================= HTML5 TEMPLATES ================= -->
+  <!-- ================= TEMPLATES ================= -->
 
-  <!-- Template A: Big, Readable Bubbly Contact Card -->
+  <!-- 1. BENTO CONTACT CARD -->
   <template id="tmpl-contact-card">
-    <div class="bubbly-contact-card" role="listitem" tabindex="0">
-      <div class="card-left-col">
-        <div class="card-avatar"></div>
+    <div class="bento-card" role="listitem" tabindex="0">
+      <div class="bento-avatar"></div>
+      <div class="bento-info">
+        <div class="bento-header-primary"></div>
+        <div class="bento-sub-person"></div>
+        <div class="bento-direct-phone"></div>
       </div>
-      <div class="card-mid-col">
-        <div class="card-name"></div>
-        <div class="card-meta"></div>
-        <div class="card-submeta"></div>
-      </div>
-      <div class="card-right-col">
-        <span class="bubbly-badge"></span>
-        <span class="card-key-cue">↵ Open</span>
+      <div class="bento-action-badge">
+        <span class="status-tag"></span>
+        <span class="open-cue">↵ Open</span>
       </div>
     </div>
   </template>
 
-  <!-- Template B: Profile Bento View -->
-  <template id="tmpl-bento-profile">
-    <div class="profile-cards-stack">
-      <!-- Profile Hero Card -->
-      <div class="bubbly-card hero-bubble">
-        <div class="hero-top-row">
-          <div class="hero-avatar"></div>
-          <div class="hero-name-block">
-            <h2 class="hero-name"></h2>
-            <div class="hero-title-company"></div>
+  <!-- 2. COCKPIT (CALL & EMAIL COMMAND CENTER) -->
+  <template id="tmpl-cockpit">
+    <div class="cockpit-layout">
+      
+      <!-- Contact Hero (Business Name as Primary Header) -->
+      <div class="cockpit-hero">
+        <div class="hero-avatar"></div>
+        <div class="hero-details">
+          <h1 class="hero-business-title"></h1>
+          <div class="hero-person-row"></div>
+          <div class="hero-phone-row"></div>
+          <div class="hero-email-row"></div>
+        </div>
+      </div>
+
+      <!-- DUAL-ACTION LAUNCHPAD: CALL & EMAIL -->
+      <div class="cockpit-dual-triggers">
+        <a id="btnCockpitCall" href="#" class="chunky-action-tile tile-call">
+          <div class="tile-icon">📞</div>
+          <div class="tile-content">
+            <div class="tile-key-badge"><span class="key-badge-lg">1</span> CALL</div>
+            <div class="tile-sub">Voice Dial</div>
           </div>
-          <span class="bubbly-badge hero-badge"></span>
+        </a>
+
+        <button id="btnCockpitEmail" class="chunky-action-tile tile-email">
+          <div class="tile-icon">✉️</div>
+          <div class="tile-content">
+            <div class="tile-key-badge"><span class="key-badge-lg">2</span> EMAIL</div>
+            <div class="tile-sub">Send Template</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- 4-WAY INSTANT DISPOSITION GRID (KEYS 3, 4, 5, 7) -->
+      <div class="disposition-container">
+        <div class="disposition-header">
+          <span>DISPOSITION (GRADUATES CONTACT OUT)</span>
         </div>
-        <!-- Quick Nav Arrows -->
-        <div class="hero-nav-row">
-          <button id="btnPrevProfile" class="btn btn-subtle btn-xs" title="Key 4"><span class="k-badge">4</span> ◀ Prev</button>
-          <span class="hero-counter-label"></span>
-          <button id="btnNextProfile" class="btn btn-subtle btn-xs" title="Key 6">Next <span class="k-badge">6</span> ▶</button>
+        <div class="disposition-grid">
+          <!-- Key 3: No Answer -->
+          <button id="btnDispNoAnswer" class="disp-btn disp-no-answer">
+            <span class="disp-key">3</span>
+            <span class="disp-icon">🔕</span>
+            <span class="disp-title">NO ANSWER</span>
+            <span class="disp-desc">Stay in Fresh</span>
+          </button>
+
+          <!-- Key 4: Call Back -->
+          <button id="btnDispCallBack" class="disp-btn disp-callback">
+            <span class="disp-key">4</span>
+            <span class="disp-icon">📅</span>
+            <span class="disp-title">CALL BACK</span>
+            <span class="disp-desc">Schedule</span>
+          </button>
+
+          <!-- Key 5: Contacted -->
+          <button id="btnDispContacted" class="disp-btn disp-contacted">
+            <span class="disp-key">5</span>
+            <span class="disp-icon">⭐</span>
+            <span class="disp-title">CONTACTED</span>
+            <span class="disp-desc">Done / Closed</span>
+          </button>
+
+          <!-- Key 7: DNC -->
+          <button id="btnDispDNC" class="disp-btn disp-dnc">
+            <span class="disp-key">7</span>
+            <span class="disp-icon">🚫</span>
+            <span class="disp-title">D.N.C.</span>
+            <span class="disp-desc">Purge / Scrub</span>
+          </button>
         </div>
       </div>
 
-      <!-- Direct Channels Card -->
-      <div class="bubbly-card comms-bubble">
-        <div class="comm-line">
-          <span class="comm-icon">📞</span>
-          <span class="comm-val profile-phone-val select-text"></span>
+      <!-- Notes Bento (Hidden completely if blank) -->
+      <div id="cockpitNotesBox" class="bento-box mt-2">
+        <div class="box-head-row">
+          <span class="box-caption">NOTES</span>
+          <button id="btnQuickEditNotes" class="btn-micro"><span class="key-badge">6</span> Edit</button>
         </div>
-        <div class="comm-line">
-          <span class="comm-icon">✉️</span>
-          <span class="comm-val profile-email-val select-text"></span>
-        </div>
+        <p class="cockpit-notes-text"></p>
       </div>
 
-      <!-- Schedule Card -->
-      <div class="bubbly-card schedule-bubble">
-        <div class="card-head-row">
-          <span class="card-caption">Next Follow-Up</span>
-          <span class="schedule-status-tag"></span>
+      <!-- Activity History -->
+      <div id="cockpitHistoryBox" class="bento-box mt-2">
+        <div class="box-head-row">
+          <span class="box-caption">ACTIVITY HISTORY</span>
+          <span class="cockpit-log-count"></span>
         </div>
-        <div class="schedule-date-highlight"></div>
+        <div class="cockpit-history-feed"></div>
       </div>
 
-      <!-- Address / Office Card -->
-      <div class="bubbly-card">
-        <span class="card-caption">Address &amp; Office</span>
-        <p class="profile-address-val select-text"></p>
-      </div>
-
-      <!-- Notes Memo Card -->
-      <div class="bubbly-card">
-        <div class="card-head-row">
-          <span class="card-caption">Notes</span>
-          <span class="k-hint">Press 7 to edit</span>
-        </div>
-        <p class="profile-notes-val"></p>
-      </div>
-
-      <!-- Interaction History Card -->
-      <div class="bubbly-card">
-        <div class="card-head-row">
-          <span class="card-caption">Activity History</span>
-          <span class="profile-logs-count">0</span>
-        </div>
-        <div class="profile-history-stream"></div>
-      </div>
-    </div>
-  </template>
-
-  <!-- Template C: Log Item -->
-  <template id="tmpl-history-item">
-    <div class="bubbly-log-card">
-      <div class="log-head">
-        <span class="log-type-tag"></span>
-        <span class="log-date"></span>
-      </div>
-      <div class="log-outcome"></div>
-      <div class="log-note hidden"></div>
     </div>
   </template>
 

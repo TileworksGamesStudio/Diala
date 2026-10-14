@@ -1,16 +1,48 @@
 /**
  * PERSONAL DIALER & CLIENT CONTACT MANAGEMENT
- * Bubbly Flip Phone Engine with Full Physical Keypad & D-Pad Controls
- * Optimized for CAT S22 Flip (2.8" display)
- * British Racing Green & Illuminated Gold Edition
+ * Bubbly Flip Phone Engine - High-Velocity Cockpit Edition
+ * Optimized for Small Screen Devices (CAT S22 Flip / 2.8" Displays)
+ * British Racing Green & Illuminated 24K Gold
+ *
+ * Strict Keypad Matrix:
+ *  - LIST: [1] Call Lead | [2] Email Lead | [4] Logs | [5/*] Search | [6] Setup | [7] Fresh | [8] Call Back | [9] Contacted | [#] CSV | [Enter] Open Cockpit
+ *  - COCKPIT: [1] Call | [2] Email | [3] No Answer | [4] Call Back | [5] Contacted | [6] Edit | [7] D.N.C. | [0] Back
  */
 
 (() => {
   'use strict';
 
-  // --- 1. Database & Persistence Layer (IndexedDB) ---
-  const DB_NAME = 'PersonalDialerDB';
-  const DB_VERSION = 1;
+  // --- 1. MODULAR EMAIL TEMPLATES BANK ---
+  const DEFAULT_EMAIL_TEMPLATES = {
+    intro: {
+      id: 'intro',
+      title: 'Introduction',
+      subject: 'Connecting regarding {company}',
+      body: 'Hi {first_name},\n\nJust attempted to reach you by phone. Wanted to share a quick overview of how we assist teams like {company}.\n\nAre you available for a brief 5-minute call tomorrow?\n\nBest regards,\n[Your Name]\n[Your Phone]'
+    },
+    followup: {
+      id: 'followup',
+      title: 'Post-Call Follow-Up',
+      subject: 'Following up on our conversation — {first_name}',
+      body: 'Hi {first_name},\n\nGreat speaking with you just now. As discussed, I am following up with the relevant details for {company}.\n\nLet me know if you have any questions.\n\nBest regards,\n[Your Name]'
+    },
+    voicemail: {
+      id: 'voicemail',
+      title: 'Left Voicemail',
+      subject: 'Just left you a voicemail / {company}',
+      body: 'Hi {first_name},\n\nI just left you a quick voicemail on {phone}. Please let me know when you might have 3 minutes to connect.\n\nBest regards,\n[Your Name]'
+    },
+    reconnect: {
+      id: 'reconnect',
+      title: 'Check-In',
+      subject: 'Checking in — {company}',
+      body: 'Hi {first_name},\n\nCircling back on our previous touchpoint. Would love to get a brief update on your schedule this week.\n\nBest regards,\n[Your Name]'
+    }
+  };
+
+  // --- 2. IndexedDB Layer ---
+  const DB_NAME = 'FlipDiallerDB';
+  const DB_VERSION = 2;
   let dbInstance = null;
 
   function initDB() {
@@ -22,11 +54,11 @@
         
         if (!db.objectStoreNames.contains('contacts')) {
           const contactStore = db.createObjectStore('contacts', { keyPath: 'id' });
+          contactStore.createIndex('company', 'company', { unique: false });
           contactStore.createIndex('name', 'name', { unique: false });
           contactStore.createIndex('phone', 'phone', { unique: false });
-          contactStore.createIndex('email', 'email', { unique: false });
-          contactStore.createIndex('next_follow_up_at', 'next_follow_up_at', { unique: false });
-          contactStore.createIndex('status', 'status', { unique: false });
+          contactStore.createIndex('stage', 'stage', { unique: false });
+          contactStore.createIndex('next_callback_at', 'next_callback_at', { unique: false });
         }
 
         if (!db.objectStoreNames.contains('interactions')) {
@@ -45,43 +77,35 @@
         resolve(dbInstance);
       };
 
-      request.onerror = (e) => {
-        console.error('IndexedDB Open Error:', e.target.error);
-        reject(e.target.error);
-      };
+      request.onerror = (e) => reject(e.target.error);
     });
   }
 
-  function dbTransaction(storeName, mode) {
+  function dbStore(storeName, mode) {
     return dbInstance.transaction(storeName, mode).objectStore(storeName);
   }
 
-  // --- 2. State & Defaults ---
+  // --- 3. App State ---
   const state = {
     contacts: [],
     filteredContacts: [],
     currentContactIndex: -1,
-    activeQueue: 'all',
+    activeQueue: 'uncontacted', // 'uncontacted' | 'callback' | 'contacted' | 'all'
     searchQuery: '',
-    lastCallTimestamp: null,
-    pendingCallContact: null,
-    emailDraftContext: null,
-    parsedImportData: null,
-    activeScreenId: 'screenContacts',
     focusedCardIndex: 0,
+    activeScreenId: 'screenContacts',
+    emailTemplates: { ...DEFAULT_EMAIL_TEMPLATES },
+    activeTemplateId: 'intro',
+    pendingCallbackContact: null,
     settings: {
-      templateSubject: 'Following up regarding our conversation',
-      templateBody: 'Hi {first_name},\n\nThank you for speaking today. As discussed, following up with details.\n\nBest regards,\n[Your Name]',
-      dailyTargetCalls: 10
+      dailyCallTarget: 10,
+      todayCallCount: 0
     }
   };
 
-  // --- 3. RFC 4180 CSV Engine ---
+  // --- 4. CSV Parsing Engine ---
   function parseCSV(text) {
-    if (text.charCodeAt(0) === 0xFEFF) {
-      text = text.slice(1);
-    }
-
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     const rows = [];
     let currentRow = [];
     let currentField = '';
@@ -111,387 +135,310 @@
           currentField = '';
         } else if (char === '\r' || char === '\n') {
           currentRow.push(currentField.trim());
-          if (currentRow.length > 0 && currentRow.some(field => field.length > 0)) {
-            rows.push(currentRow);
-          }
+          if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
           currentRow = [];
           currentField = '';
-          if (char === '\r' && nextChar === '\n') {
-            i++;
-          }
+          if (char === '\r' && nextChar === '\n') i++;
         } else {
           currentField += char;
         }
       }
       i++;
     }
-
-    if (currentField.length > 0 || currentRow.length > 0) {
+    if (currentField || currentRow.length > 0) {
       currentRow.push(currentField.trim());
-      if (currentRow.some(field => field.length > 0)) {
-        rows.push(currentRow);
-      }
+      if (currentRow.some(f => f.length > 0)) rows.push(currentRow);
     }
-
     return rows;
   }
 
   function mapCSVToContacts(rows) {
     if (rows.length < 2) return [];
-
-    const rawHeaders = rows[0].map(h => h.toLowerCase().replace(/[\s\-_]+/g, '_'));
-    const standardMap = {
-      name: ['name', 'full_name', 'contact_name', 'client_name'],
-      phone: ['phone', 'telephone', 'mobile', 'cell', 'phone_number'],
-      email: ['email', 'email_address'],
-      country: ['country', 'nation'],
-      city: ['city', 'town'],
-      street_address: ['street_address', 'address', 'street', 'address_line_1'],
-      postal_code: ['postal_code', 'zip', 'zip_code', 'postcode'],
-      company: ['company', 'organisation', 'business', 'org'],
-      job_title: ['job_title', 'title', 'role'],
-      notes: ['notes', 'comments', 'memo']
+    const headers = rows[0].map(h => h.toLowerCase().replace(/[\s\-_]+/g, '_'));
+    
+    const findIndex = (aliases) => {
+      for (const a of aliases) {
+        const idx = headers.indexOf(a);
+        if (idx !== -1) return idx;
+      }
+      return -1;
     };
 
-    const headerIndexes = {};
-    for (const [key, aliases] of Object.entries(standardMap)) {
-      for (const alias of aliases) {
-        const idx = rawHeaders.indexOf(alias);
-        if (idx !== -1) {
-          headerIndexes[key] = idx;
-          break;
-        }
-      }
-    }
+    const idxCompany = findIndex(['company', 'business', 'organization', 'org', 'account', 'business_name', 'company_name']);
+    const idxName = findIndex(['name', 'full_name', 'contact', 'client', 'contact_name']);
+    const idxPhone = findIndex(['phone', 'telephone', 'mobile', 'cell', 'tel', 'phone_number']);
+    const idxEmail = findIndex(['email', 'mail', 'email_address']);
+    const idxRole = findIndex(['title', 'role', 'job_title', 'position']);
+    const idxNotes = findIndex(['notes', 'comments', 'memo', 'description']);
 
     const contacts = [];
     for (let r = 1; r < rows.length; r++) {
       const row = rows[r];
-      if (row.length === 0) continue;
+      const company = (row[idxCompany] || '').trim();
+      const name = (row[idxName] || '').trim();
+      const phone = (row[idxPhone] || '').trim();
+      const email = (row[idxEmail] || '').trim();
 
-      const contact = {
-        id: 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-        name: row[headerIndexes.name] || 'Unnamed Contact',
-        phone: row[headerIndexes.phone] || '',
-        email: row[headerIndexes.email] || '',
-        country: row[headerIndexes.country] || '',
-        city: row[headerIndexes.city] || '',
-        street_address: row[headerIndexes.street_address] || '',
-        postal_code: row[headerIndexes.postal_code] || '',
-        company: row[headerIndexes.company] || '',
-        job_title: row[headerIndexes.job_title] || '',
-        notes: row[headerIndexes.notes] || '',
-        status: 'uncontacted',
-        last_contacted_at: null,
-        next_follow_up_at: null,
-        created_at: new Date().toISOString()
-      };
-
-      if (contact.name || contact.phone || contact.email) {
-        contacts.push(contact);
+      if (company || name || phone || email) {
+        contacts.push({
+          id: 'lead_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8),
+          company: company,
+          name: name,
+          phone: phone,
+          email: email,
+          job_title: (row[idxRole] || '').trim(),
+          notes: (row[idxNotes] || '').trim(),
+          stage: 'uncontacted',
+          attempts: 0,
+          last_contacted_at: null,
+          next_callback_at: null,
+          created_at: new Date().toISOString()
+        });
       }
     }
     return contacts;
   }
 
-  // --- 4. Formatters & Helpers ---
-  function normalisePhoneForDial(phoneStr) {
-    if (!phoneStr) return '';
-    const hasPlus = phoneStr.trim().startsWith('+');
-    const digits = phoneStr.replace(/\D/g, '');
+  // --- 5. Formatters & Helpers ---
+  function cleanPhoneForDial(str) {
+    if (!str) return '';
+    const hasPlus = str.trim().startsWith('+');
+    const digits = str.replace(/\D/g, '');
     return hasPlus ? `+${digits}` : digits;
   }
 
-  function formatDate(isoStr) {
-    if (!isoStr) return 'Never';
-    const date = new Date(isoStr);
-    return date.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
-
-  function getInitials(name) {
-    if (!name) return '?';
-    const parts = name.trim().split(/\s+/);
+  function getInitials(primaryStr, fallbackStr) {
+    const target = (primaryStr || fallbackStr || '?').trim();
+    const parts = target.split(/\s+/);
     if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
-  // --- 5. Data Access Layer ---
-  async function loadAllContacts() {
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('contacts', 'readonly');
-        const req = store.getAll();
-        req.onsuccess = () => {
-          state.contacts = req.result || [];
-          resolve(state.contacts);
-        };
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+  function formatDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // --- 6. Data Persistence Operations ---
+  async function loadAllData() {
+    return new Promise((resolve) => {
+      const store = dbStore('contacts', 'readonly');
+      const req = store.getAll();
+      req.onsuccess = () => {
+        state.contacts = req.result || [];
+        resolve(state.contacts);
+      };
     });
   }
 
   async function saveContact(contact) {
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('contacts', 'readwrite');
-        const req = store.put(contact);
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+    return new Promise((resolve) => {
+      const store = dbStore('contacts', 'readwrite');
+      store.put(contact).onsuccess = () => resolve(true);
     });
   }
 
-  async function logInteraction(contactId, type, outcome, note, followUp) {
+  async function deleteContact(id) {
+    return new Promise((resolve) => {
+      const store = dbStore('contacts', 'readwrite');
+      store.delete(id).onsuccess = () => {
+        state.contacts = state.contacts.filter(c => c.id !== id);
+        resolve(true);
+      };
+    });
+  }
+
+  async function logAudit(contactId, action, outcome, note) {
     const record = {
       contact_id: contactId,
-      type: type,
+      action: action,
       outcome: outcome,
       note: note || '',
-      follow_up_scheduled: followUp || null,
       timestamp: new Date().toISOString()
     };
-
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('interactions', 'readwrite');
-        const req = store.add(record);
-        req.onsuccess = () => resolve(record);
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+    return new Promise((resolve) => {
+      const store = dbStore('interactions', 'readwrite');
+      store.add(record).onsuccess = () => resolve(record);
     });
   }
 
-  async function getAllInteractions() {
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('interactions', 'readonly');
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+  async function getAuditLogsForContact(contactId) {
+    return new Promise((resolve) => {
+      const store = dbStore('interactions', 'readonly');
+      const index = store.index('contact_id');
+      index.getAll(contactId).onsuccess = (e) => {
+        const logs = e.target.result || [];
+        logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        resolve(logs);
+      };
     });
   }
 
-  async function getInteractionsForContact(contactId) {
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('interactions', 'readonly');
-        const index = store.index('contact_id');
-        const req = index.getAll(contactId);
-        req.onsuccess = () => {
-          const logs = req.result || [];
-          logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          resolve(logs);
-        };
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+  async function getAllAuditLogs() {
+    return new Promise((resolve) => {
+      const store = dbStore('interactions', 'readonly');
+      store.getAll().onsuccess = (e) => {
+        const logs = e.target.result || [];
+        logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        resolve(logs);
+      };
     });
   }
 
   async function loadSettings() {
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('settings', 'readonly');
-        const req = store.get('app_preferences');
-        req.onsuccess = () => {
-          if (req.result && req.result.value) {
-            state.settings = { ...state.settings, ...req.result.value };
+    return new Promise((resolve) => {
+      const store = dbStore('settings', 'readonly');
+      store.get('app_prefs').onsuccess = (e) => {
+        if (e.target.result && e.target.result.val) {
+          state.settings = { ...state.settings, ...e.target.result.val.settings };
+          if (e.target.result.val.templates) {
+            state.emailTemplates = { ...state.emailTemplates, ...e.target.result.val.templates };
           }
-          resolve(state.settings);
-        };
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+        }
+        resolve(true);
+      };
     });
   }
 
-  async function saveSettings() {
-    return new Promise((resolve, reject) => {
-      try {
-        const store = dbTransaction('settings', 'readwrite');
-        const req = store.put({ key: 'app_preferences', value: state.settings });
-        req.onsuccess = () => resolve(true);
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
+  async function persistSettings() {
+    return new Promise((resolve) => {
+      const store = dbStore('settings', 'readwrite');
+      store.put({ key: 'app_prefs', val: { settings: state.settings, templates: state.emailTemplates } }).onsuccess = () => resolve(true);
     });
   }
 
-  // --- 6. Ambient Status Computations ---
-  async function updateAmbientStatus() {
+  // --- 7. HUD Telemetry ---
+  async function refreshTelemetryHUD() {
     const now = new Date();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const todayStr = now.toLocaleDateString('en-CA');
+    const logs = await getAllAuditLogs();
 
-    const dueCount = state.contacts.filter(c => {
-      if (!c.next_follow_up_at || c.status === 'do_not_contact') return false;
-      return new Date(c.next_follow_up_at) <= todayEnd;
-    }).length;
+    const todayCalls = logs.filter(l => l.action === 'call' && new Date(l.timestamp).toLocaleDateString('en-CA') === todayStr).length;
+    document.getElementById('hudCallCount').textContent = `${todayCalls}/${state.settings.dailyCallTarget}`;
 
-    const allLogs = await getAllInteractions();
+    const dueCount = state.contacts.filter(c => c.stage === 'callback' && c.next_callback_at && new Date(c.next_callback_at) <= now).length;
+    document.getElementById('hudDueCount').textContent = `${dueCount} Due`;
 
-    // Streak count
-    const distinctCallDays = new Set(
-      allLogs
-        .filter(l => l.type === 'call')
-        .map(l => new Date(l.timestamp).toLocaleDateString('en-CA'))
-    );
+    const uncontacted = state.contacts.filter(c => c.stage === 'uncontacted').length;
+    const callbacks = state.contacts.filter(c => c.stage === 'callback').length;
+    const contacted = state.contacts.filter(c => c.stage === 'contacted').length;
 
-    let streak = 0;
-    let checkDate = new Date();
-    const checkDateStr = checkDate.toLocaleDateString('en-CA');
-
-    if (distinctCallDays.has(checkDateStr)) {
-      while (distinctCallDays.has(checkDate.toLocaleDateString('en-CA'))) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      }
-    } else {
-      checkDate.setDate(checkDate.getDate() - 1);
-      while (distinctCallDays.has(checkDate.toLocaleDateString('en-CA'))) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      }
-    }
-
-    document.getElementById('streakCountText').textContent = `${streak}d`;
-    document.getElementById('dueCounterText').textContent = `${dueCount} due`;
+    document.getElementById('countUncontacted').textContent = uncontacted;
+    document.getElementById('countCallback').textContent = callbacks;
+    document.getElementById('countContacted').textContent = contacted;
   }
 
-  // --- 7. List Filtering & Rendering ---
-  function applyFiltersAndRender() {
-    const query = state.searchQuery.toLowerCase().trim();
-    const queue = state.activeQueue;
-    const now = new Date();
+  // --- 8. Filter Pipeline & List Rendering ---
+  function applyPipelineFilter() {
+    const q = state.searchQuery.toLowerCase().trim();
+    const stage = state.activeQueue;
 
-    state.filteredContacts = state.contacts.filter(contact => {
-      const searchMatch = !query ||
-        contact.name.toLowerCase().includes(query) ||
-        contact.phone.toLowerCase().includes(query) ||
-        contact.email.toLowerCase().includes(query) ||
-        contact.city.toLowerCase().includes(query) ||
-        contact.company.toLowerCase().includes(query) ||
-        contact.notes.toLowerCase().includes(query);
+    state.filteredContacts = state.contacts.filter(c => {
+      const matchesSearch = !q ||
+        (c.company && c.company.toLowerCase().includes(q)) ||
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.toLowerCase().includes(q)) ||
+        (c.email && c.email.toLowerCase().includes(q));
 
-      if (!searchMatch) return false;
-
-      if (queue === 'all') return true;
-      if (queue === 'new') return contact.status === 'uncontacted';
-      if (queue === 'due') {
-        if (!contact.next_follow_up_at || contact.status === 'do_not_contact') return false;
-        return new Date(contact.next_follow_up_at) <= new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-      }
-      if (queue === 'recent') {
-        return contact.last_contacted_at !== null;
-      }
-      return true;
+      if (!matchesSearch) return false;
+      if (stage === 'all') return true;
+      return c.stage === stage;
     });
 
     state.filteredContacts.sort((a, b) => {
-      if (queue === 'due') {
-        return new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at);
+      if (stage === 'callback') {
+        return new Date(a.next_callback_at || 0) - new Date(b.next_callback_at || 0);
       }
-      if (queue === 'recent') {
-        return new Date(b.last_contacted_at) - new Date(a.last_contacted_at);
-      }
-      return a.name.localeCompare(b.name);
+      const titleA = (a.company || a.name || '').toLowerCase();
+      const titleB = (b.company || b.name || '').toLowerCase();
+      return titleA.localeCompare(titleB);
     });
 
     renderContactList();
-    updateAmbientStatus();
+    refreshTelemetryHUD();
   }
 
   function renderContactList() {
-    const listContainer = document.getElementById('contactList');
-    
+    const list = document.getElementById('contactList');
     if (state.filteredContacts.length === 0) {
-      listContainer.innerHTML = `
-        <div class="empty-state-bubble">
-          <p>No contacts found.</p>
-          <button id="btnEmptyImportTrigger" class="btn btn-gold btn-sm"><span class="k-badge">9</span> Import CSV</button>
+      list.innerHTML = `
+        <div class="bento-box" style="padding: 24px 8px; text-align: center;">
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 8px;">No leads in this queue.</p>
+          <button id="btnEmptyImportTrigger" class="btn btn-gold btn-sm"><span class="key-badge">#</span> Import CSV</button>
         </div>`;
       const btn = document.getElementById('btnEmptyImportTrigger');
       if (btn) btn.onclick = () => document.getElementById('fileCsvInput').click();
       return;
     }
 
-    const template = document.getElementById('tmpl-contact-card');
-    const fragment = document.createDocumentFragment();
+    const tmpl = document.getElementById('tmpl-contact-card');
+    const frag = document.createDocumentFragment();
 
-    state.filteredContacts.forEach((contact, idx) => {
-      const clone = template.content.cloneNode(true);
-      const card = clone.querySelector('.bubbly-contact-card');
-      card.dataset.id = contact.id;
+    state.filteredContacts.forEach((c, idx) => {
+      const clone = tmpl.content.cloneNode(true);
+      const card = clone.querySelector('.bento-card');
+      card.dataset.id = c.id;
       card.dataset.index = idx;
 
-      // Avatar
-      card.querySelector('.card-avatar').textContent = getInitials(contact.name);
+      // BUSINESS NAME IS PRIMARY HEADER
+      const primaryHeader = c.company ? c.company : (c.name ? c.name : '');
+      const secondaryPerson = c.company && c.name ? (c.job_title ? `${c.name} • ${c.job_title}` : c.name) : (c.company ? '' : (c.job_title || ''));
 
-      // Name & details
-      card.querySelector('.card-name').textContent = contact.name;
+      card.querySelector('.bento-avatar').textContent = getInitials(c.company, c.name);
       
-      const metaParts = [];
-      if (contact.job_title && contact.company) metaParts.push(`${contact.job_title} at ${contact.company}`);
-      else if (contact.company) metaParts.push(contact.company);
-      else if (contact.phone) metaParts.push(contact.phone);
-      card.querySelector('.card-meta').textContent = metaParts.join(' • ') || 'No company registered';
-
-      const submetaParts = [];
-      if (contact.phone && metaParts[0] !== contact.phone) submetaParts.push(contact.phone);
-      if (contact.city) submetaParts.push(contact.city);
-      card.querySelector('.card-submeta').textContent = submetaParts.join(' • ');
-
-      // Badge
-      const badge = card.querySelector('.bubbly-badge');
-      if (contact.status === 'do_not_contact') {
-        badge.className = 'bubbly-badge badge-dnc';
-        badge.textContent = 'DNC';
-      } else if (contact.next_follow_up_at && new Date(contact.next_follow_up_at) <= new Date()) {
-        badge.className = 'bubbly-badge badge-due';
-        badge.textContent = 'Due';
-      } else if (contact.last_contacted_at) {
-        badge.className = 'bubbly-badge badge-contacted';
-        badge.textContent = 'Done';
+      const headEl = card.querySelector('.bento-header-primary');
+      if (primaryHeader) {
+        headEl.textContent = primaryHeader;
       } else {
-        badge.className = 'bubbly-badge badge-new';
-        badge.textContent = 'New';
+        headEl.style.display = 'none';
       }
 
-      card.addEventListener('click', () => openContactProfile(contact.id));
-      fragment.appendChild(clone);
+      const subEl = card.querySelector('.bento-sub-person');
+      if (secondaryPerson) {
+        subEl.textContent = secondaryPerson;
+      } else {
+        subEl.style.display = 'none';
+      }
+
+      const phoneEl = card.querySelector('.bento-direct-phone');
+      if (c.phone) {
+        phoneEl.textContent = `📞 ${c.phone}`;
+      } else {
+        phoneEl.style.display = 'none';
+      }
+
+      // Status Tag
+      const tag = card.querySelector('.status-tag');
+      if (c.stage === 'uncontacted') {
+        tag.className = 'status-tag tag-uncontacted';
+        tag.textContent = c.attempts > 0 ? `Att: ${c.attempts}` : 'Fresh';
+      } else if (c.stage === 'callback') {
+        const isOverdue = c.next_callback_at && new Date(c.next_callback_at) <= new Date();
+        tag.className = `status-tag ${isOverdue ? 'tag-due' : 'tag-callback'}`;
+        tag.textContent = isOverdue ? 'Due Now' : 'Callback';
+      } else if (c.stage === 'contacted') {
+        tag.className = 'status-tag tag-contacted';
+        tag.textContent = 'Spoken';
+      }
+
+      card.addEventListener('click', () => openCockpit(c.id));
+      frag.appendChild(clone);
     });
 
-    listContainer.replaceChildren(fragment);
-
-    // Apply D-Pad focus to first card if applicable
-    highlightCurrentCard(false);
+    list.replaceChildren(frag);
+    highlightCard(false);
   }
 
-  function highlightCurrentCard(shouldScroll = true) {
-    const cards = document.querySelectorAll('.bubbly-contact-card');
+  function highlightCard(shouldScroll = true) {
+    const cards = document.querySelectorAll('.bento-card');
     if (cards.length === 0) return;
 
     if (state.focusedCardIndex < 0) state.focusedCardIndex = 0;
     if (state.focusedCardIndex >= cards.length) state.focusedCardIndex = cards.length - 1;
 
-    cards.forEach((c, idx) => {
-      c.classList.toggle('focused-dpad', idx === state.focusedCardIndex);
+    cards.forEach((card, idx) => {
+      card.classList.toggle('focused-dpad', idx === state.focusedCardIndex);
     });
 
     if (shouldScroll && cards[state.focusedCardIndex]) {
@@ -499,629 +446,396 @@
     }
   }
 
-  // --- 8. Profile View & Actions ---
-  function openContactProfile(contactId) {
-    const index = state.filteredContacts.findIndex(c => c.id === contactId);
-    if (index === -1) return;
+  // --- 9. Cockpit View (Zero-Placeholder Architecture) ---
+  function openCockpit(contactId) {
+    const idx = state.filteredContacts.findIndex(c => c.id === contactId);
+    if (idx === -1) return;
 
-    state.currentContactIndex = index;
-    renderProfileView(state.filteredContacts[index]);
+    state.currentContactIndex = idx;
+    renderCockpitView(state.filteredContacts[idx]);
     switchScreen('screenProfile');
   }
 
-  async function renderProfileView(contact) {
-    const detailsContainer = document.getElementById('profileDetails');
-    const template = document.getElementById('tmpl-bento-profile');
-    const clone = template.content.cloneNode(true);
+  async function renderCockpitView(contact) {
+    const container = document.getElementById('profileCockpit');
+    const tmpl = document.getElementById('tmpl-cockpit');
+    const clone = tmpl.content.cloneNode(true);
 
-    // Hero
-    clone.querySelector('.hero-avatar').textContent = getInitials(contact.name);
-    clone.querySelector('.hero-name').textContent = contact.name;
-    
-    const roleParts = [];
-    if (contact.job_title) roleParts.push(contact.job_title);
-    if (contact.company) roleParts.push(contact.company);
-    clone.querySelector('.hero-title-company').textContent = roleParts.join(' at ') || 'No company listed';
+    clone.querySelector('.hero-avatar').textContent = getInitials(contact.company, contact.name);
 
-    clone.querySelector('.hero-counter-label').textContent = `${state.currentContactIndex + 1} of ${state.filteredContacts.length}`;
+    // Business Name as Header
+    const heroTitle = clone.querySelector('.hero-business-title');
+    const heroPerson = clone.querySelector('.hero-person-row');
+    const heroPhone = clone.querySelector('.hero-phone-row');
+    const heroEmail = clone.querySelector('.hero-email-row');
 
-    const statusBadge = clone.querySelector('.hero-badge');
-    if (contact.status === 'do_not_contact') {
-      statusBadge.className = 'bubbly-badge badge-dnc';
-      statusBadge.textContent = 'DNC';
-    } else if (contact.next_follow_up_at && new Date(contact.next_follow_up_at) <= new Date()) {
-      statusBadge.className = 'bubbly-badge badge-due';
-      statusBadge.textContent = 'Overdue';
+    if (contact.company) {
+      heroTitle.textContent = contact.company;
+      if (contact.name || contact.job_title) {
+        heroPerson.textContent = [contact.name, contact.job_title].filter(Boolean).join(' • ');
+      } else {
+        heroPerson.style.display = 'none';
+      }
+    } else if (contact.name) {
+      heroTitle.textContent = contact.name;
+      if (contact.job_title) {
+        heroPerson.textContent = contact.job_title;
+      } else {
+        heroPerson.style.display = 'none';
+      }
     } else {
-      statusBadge.className = 'bubbly-badge badge-new';
-      statusBadge.textContent = contact.status;
+      heroTitle.style.display = 'none';
+      heroPerson.style.display = 'none';
     }
 
-    // Direct Comms
-    clone.querySelector('.profile-phone-val').textContent = contact.phone || 'None registered';
-    clone.querySelector('.profile-email-val').textContent = contact.email || 'None registered';
-
-    // Outreach
-    const scheduleDateText = clone.querySelector('.schedule-date-highlight');
-    const scheduleRelativeTime = clone.querySelector('.schedule-status-tag');
-    if (contact.next_follow_up_at) {
-      scheduleDateText.textContent = formatDate(contact.next_follow_up_at);
-      const isOverdue = new Date(contact.next_follow_up_at) < new Date();
-      scheduleRelativeTime.textContent = isOverdue ? '⚠️ Overdue' : 'Scheduled';
+    // Phone / Email rows (zero placeholder strings)
+    if (contact.phone) {
+      heroPhone.textContent = `📞 ${contact.phone}`;
     } else {
-      scheduleDateText.textContent = 'None Scheduled';
-      scheduleRelativeTime.textContent = 'Press 3 to set';
+      heroPhone.style.display = 'none';
     }
 
-    // Address
-    const addressStr = [contact.street_address, contact.city, contact.postal_code, contact.country]
-      .filter(Boolean)
-      .join(', ');
-    clone.querySelector('.profile-address-val').textContent = addressStr || 'No address registered.';
+    if (contact.email) {
+      heroEmail.textContent = `✉️ ${contact.email}`;
+    } else {
+      heroEmail.style.display = 'none';
+    }
 
-    // Notes
-    clone.querySelector('.profile-notes-val').textContent = contact.notes || 'No notes added yet.';
-
-    // Navigation Buttons inside card
-    clone.querySelector('#btnPrevProfile').onclick = () => navigateProfile(-1);
-    clone.querySelector('#btnNextProfile').onclick = () => navigateProfile(1);
-
-    // Contextual Bottom Action Dock setup
-    const dialPhone = normalisePhoneForDial(contact.phone);
-    const callBtn = document.getElementById('btnActionCall');
-    if (dialPhone) {
-      callBtn.href = `tel:${dialPhone}`;
+    // DUAL ACTION: VOICE CALL TILE
+    const cleanPhone = cleanPhoneForDial(contact.phone);
+    const callBtn = clone.querySelector('#btnCockpitCall');
+    if (cleanPhone) {
+      callBtn.href = `tel:${cleanPhone}`;
       callBtn.onclick = () => {
-        state.lastCallTimestamp = Date.now();
-        state.pendingCallContact = contact;
+        logAudit(contact.id, 'call', 'Dialed', `Outbound voice call to ${cleanPhone}`);
+        refreshTelemetryHUD();
       };
       callBtn.style.opacity = '1';
-      callBtn.style.pointerEvents = 'auto';
     } else {
       callBtn.href = '#';
-      callBtn.onclick = (e) => {
-        e.preventDefault();
-        alert('No phone number available.');
-      };
-      callBtn.style.opacity = '0.5';
+      callBtn.onclick = (e) => { e.preventDefault(); alert('No phone number recorded.'); };
+      callBtn.style.opacity = '0.4';
     }
 
-    detailsContainer.replaceChildren(clone);
-
-    // Populate Activity Timeline
-    const historyListContainer = detailsContainer.querySelector('.profile-history-stream');
-    const logCountLabel = detailsContainer.querySelector('.profile-logs-count');
-    const historyLogs = await getInteractionsForContact(contact.id);
-    
-    logCountLabel.textContent = `${historyLogs.length}`;
-
-    if (historyLogs.length === 0) {
-      historyListContainer.innerHTML = '<p style="font-size: 0.78rem; color: var(--text-muted); padding: 4px 0;">No recorded interactions yet.</p>';
+    // DUAL ACTION: SHOOT EMAIL TILE
+    const emailBtn = clone.querySelector('#btnCockpitEmail');
+    if (contact.email) {
+      emailBtn.onclick = () => openEmailPickerSheet(contact);
+      emailBtn.style.opacity = '1';
     } else {
-      const histTemplate = document.getElementById('tmpl-history-item');
-      const histFragment = document.createDocumentFragment();
+      emailBtn.onclick = () => alert('No email address recorded.');
+      emailBtn.style.opacity = '0.4';
+    }
 
-      historyLogs.forEach(log => {
-        const hClone = histTemplate.content.cloneNode(true);
-        hClone.querySelector('.log-type-tag').textContent = log.type.toUpperCase();
-        hClone.querySelector('.log-date').textContent = formatDate(log.timestamp);
-        hClone.querySelector('.log-outcome').textContent = log.outcome;
-        
-        const noteEl = hClone.querySelector('.log-note');
-        if (log.note) {
-          noteEl.textContent = log.note;
-          noteEl.classList.remove('hidden');
-        }
-        histFragment.appendChild(hClone);
+    // 4-WAY INSTANT DISPOSITION (KEYS 3, 4, 5, 7)
+    clone.querySelector('#btnDispNoAnswer').onclick = () => handleDispositionNoAnswer(contact);
+    clone.querySelector('#btnDispCallBack').onclick = () => openCallbackScheduler(contact);
+    clone.querySelector('#btnDispContacted').onclick = () => handleDispositionContacted(contact);
+    clone.querySelector('#btnDispDNC').onclick = () => handleDispositionDNC(contact);
+
+    // Notes Box: Hide completely if empty
+    const notesBox = clone.querySelector('#cockpitNotesBox');
+    const notesText = clone.querySelector('.cockpit-notes-text');
+    if (contact.notes && contact.notes.trim()) {
+      notesText.textContent = contact.notes;
+    } else {
+      notesBox.style.display = 'none';
+    }
+    clone.querySelector('#btnQuickEditNotes').onclick = () => openEditModal(contact);
+
+    // Activity History Box: Hide if zero interactions
+    const historyBox = clone.querySelector('#cockpitHistoryBox');
+    const feed = clone.querySelector('.cockpit-history-feed');
+    const logs = await getAuditLogsForContact(contact.id);
+    
+    if (logs.length > 0) {
+      clone.querySelector('.cockpit-log-count').textContent = `${logs.length}`;
+      logs.forEach(l => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+          <div class="history-head">
+            <span>${l.action.toUpperCase()}</span>
+            <span>${formatDate(l.timestamp)}</span>
+          </div>
+          <div class="history-action">${l.outcome}</div>
+          ${l.note ? `<div style="font-size: 0.72rem; color: #b2cfbe;">${l.note}</div>` : ''}
+        `;
+        feed.appendChild(item);
       });
-
-      historyListContainer.replaceChildren(histFragment);
+    } else {
+      historyBox.style.display = 'none';
     }
+
+    container.replaceChildren(clone);
   }
 
-  function navigateProfile(direction) {
-    const nextIdx = state.currentContactIndex + direction;
-    if (nextIdx >= 0 && nextIdx < state.filteredContacts.length) {
-      state.currentContactIndex = nextIdx;
-      renderProfileView(state.filteredContacts[nextIdx]);
-    }
-  }
-
-  // --- 9. On-the-Fly Contact Detail Editing (Key 7) ---
-  function openEditContactModal(contact) {
-    if (!contact) return;
-    document.getElementById('editContactId').value = contact.id;
-    document.getElementById('modalEditContactTitle').textContent = `Edit: ${contact.name}`;
-    document.getElementById('editName').value = contact.name || '';
-    document.getElementById('editPhone').value = contact.phone || '';
-    document.getElementById('editEmail').value = contact.email || '';
-    document.getElementById('editCompany').value = contact.company || '';
-    document.getElementById('editJobTitle').value = contact.job_title || '';
-    document.getElementById('editStreetAddress').value = contact.street_address || '';
-    document.getElementById('editCity').value = contact.city || '';
-    document.getElementById('editPostalCode').value = contact.postal_code || '';
-    document.getElementById('editCountry').value = contact.country || '';
-    document.getElementById('editNotes').value = contact.notes || '';
-
-    document.getElementById('modalEditContact').classList.remove('hidden');
-    document.getElementById('editName').focus();
-  }
-
-  async function handleEditContactSave(e) {
-    e.preventDefault();
-    const contactId = document.getElementById('editContactId').value;
-    const contact = state.contacts.find(c => c.id === contactId);
-    if (!contact) return;
-
-    contact.name = document.getElementById('editName').value.trim() || 'Unnamed Contact';
-    contact.phone = document.getElementById('editPhone').value.trim();
-    contact.email = document.getElementById('editEmail').value.trim();
-    contact.company = document.getElementById('editCompany').value.trim();
-    contact.job_title = document.getElementById('editJobTitle').value.trim();
-    contact.street_address = document.getElementById('editStreetAddress').value.trim();
-    contact.city = document.getElementById('editCity').value.trim();
-    contact.postal_code = document.getElementById('editPostalCode').value.trim();
-    contact.country = document.getElementById('editCountry').value.trim();
-    contact.notes = document.getElementById('editNotes').value.trim();
+  // --- 10. Instant 4-Way Disposition Handlers ---
+  async function handleDispositionNoAnswer(contact) {
+    contact.attempts = (contact.attempts || 0) + 1;
+    contact.last_contacted_at = new Date().toISOString();
+    contact.stage = 'uncontacted'; // Stays in fresh queue
 
     await saveContact(contact);
+    await logAudit(contact.id, 'disposition', 'No Answer', `Dial attempt #${contact.attempts}`);
+    advanceToNextLeadOrExit();
+  }
 
-    document.getElementById('modalEditContact').classList.add('hidden');
-    applyFiltersAndRender();
+  function openCallbackScheduler(contact) {
+    state.pendingCallbackContact = contact;
+    document.getElementById('customCallbackInput').value = '';
+    document.getElementById('modalScheduleCallback').classList.remove('hidden');
+  }
 
-    if (state.currentContactIndex !== -1 && state.filteredContacts[state.currentContactIndex]?.id === contact.id) {
-      renderProfileView(contact);
+  async function scheduleCallbackForLead(hoursOffset, customIsoString = null) {
+    const contact = state.pendingCallbackContact;
+    if (!contact) return;
+
+    let targetDate;
+    if (customIsoString) {
+      targetDate = new Date(customIsoString);
+    } else {
+      targetDate = new Date();
+      targetDate.setHours(targetDate.getHours() + hoursOffset);
+    }
+
+    contact.stage = 'callback';
+    contact.next_callback_at = targetDate.toISOString();
+    contact.last_contacted_at = new Date().toISOString();
+
+    await saveContact(contact);
+    await logAudit(contact.id, 'disposition', 'Call Back Scheduled', `Due: ${formatDate(contact.next_callback_at)}`);
+
+    document.getElementById('modalScheduleCallback').classList.add('hidden');
+    state.pendingCallbackContact = null;
+    advanceToNextLeadOrExit();
+  }
+
+  async function handleDispositionContacted(contact) {
+    contact.stage = 'contacted';
+    contact.next_callback_at = null;
+    contact.last_contacted_at = new Date().toISOString();
+
+    await saveContact(contact);
+    await logAudit(contact.id, 'disposition', 'Contacted / Spoken', 'Successfully contacted');
+    advanceToNextLeadOrExit();
+  }
+
+  async function handleDispositionDNC(contact) {
+    const promptName = contact.company || contact.name || 'this lead';
+    if (confirm(`Mark "${promptName}" as D.N.C. and delete contact?`)) {
+      await logAudit(contact.id, 'disposition', 'DNC / Purged', 'Scrubbed from records');
+      await deleteContact(contact.id);
+      advanceToNextLeadOrExit();
     }
   }
 
-  // --- 10. Screen Navigation & Bottom Dock Switcher ---
+  function advanceToNextLeadOrExit() {
+    applyPipelineFilter();
+    if (state.filteredContacts.length > 0) {
+      if (state.currentContactIndex >= state.filteredContacts.length) {
+        state.currentContactIndex = 0;
+      }
+      renderCockpitView(state.filteredContacts[state.currentContactIndex]);
+    } else {
+      switchScreen('screenContacts');
+    }
+  }
+
+  // --- 11. Email Drawer Logic ---
+  function openEmailPickerSheet(contact) {
+    if (!contact.email) {
+      alert('Lead has no registered email.');
+      return;
+    }
+
+    const select = document.getElementById('pickerTemplateSelect');
+    select.replaceChildren();
+
+    Object.values(state.emailTemplates).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.title;
+      select.appendChild(opt);
+    });
+
+    select.value = state.activeTemplateId;
+    updateEmailDraftFields(contact, state.activeTemplateId);
+
+    select.onchange = (e) => {
+      state.activeTemplateId = e.target.value;
+      updateEmailDraftFields(contact, state.activeTemplateId);
+    };
+
+    document.getElementById('btnLaunchMailtoApp').onclick = () => launchMailtoNative(contact);
+    document.getElementById('btnLaunchWebGmail').onclick = () => launchGmailWebTab(contact);
+    document.getElementById('btnMarkEmailLogged').onclick = async () => {
+      await logAudit(contact.id, 'email', 'Template Sent', document.getElementById('draftSubject').value);
+      document.getElementById('modalEmailPicker').classList.add('hidden');
+      renderCockpitView(contact);
+      refreshTelemetryHUD();
+    };
+
+    document.getElementById('modalEmailPicker').classList.remove('hidden');
+  }
+
+  function updateEmailDraftFields(contact, templateId) {
+    const t = state.emailTemplates[templateId] || state.emailTemplates.intro;
+    const firstName = contact.name ? contact.name.trim().split(' ')[0] : 'there';
+    const comp = contact.company || '';
+
+    const sub = t.subject
+      .replace('{name}', contact.name || '')
+      .replace('{first_name}', firstName)
+      .replace('{company}', comp);
+
+    const body = t.body
+      .replace('{name}', contact.name || '')
+      .replace('{first_name}', firstName)
+      .replace('{company}', comp)
+      .replace('{phone}', contact.phone || '');
+
+    document.getElementById('draftSubject').value = sub;
+    document.getElementById('draftBody').value = body;
+  }
+
+  function launchMailtoNative(contact) {
+    const to = encodeURIComponent(contact.email);
+    const sub = encodeURIComponent(document.getElementById('draftSubject').value);
+    const body = encodeURIComponent(document.getElementById('draftBody').value);
+    window.location.href = `mailto:${to}?subject=${sub}&body=${body}`;
+  }
+
+  function launchGmailWebTab(contact) {
+    const to = encodeURIComponent(contact.email);
+    const sub = encodeURIComponent(document.getElementById('draftSubject').value);
+    const body = encodeURIComponent(document.getElementById('draftBody').value);
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${sub}&body=${body}`, '_blank');
+  }
+
+  // --- 12. Screen Switching ---
   function switchScreen(targetScreenId) {
     state.activeScreenId = targetScreenId;
 
-    document.querySelectorAll('.screen-view').forEach(screen => {
-      screen.classList.add('hidden');
-      screen.classList.remove('active');
+    document.querySelectorAll('.screen-view').forEach(s => {
+      s.classList.add('hidden');
+      s.classList.remove('active');
     });
 
-    const activeScreen = document.getElementById(targetScreenId);
-    if (activeScreen) {
-      activeScreen.classList.remove('hidden');
-      activeScreen.classList.add('active');
-      activeScreen.scrollTop = 0;
+    const active = document.getElementById(targetScreenId);
+    if (active) {
+      active.classList.remove('hidden');
+      active.classList.add('active');
+      active.scrollTop = 0;
     }
 
-    // Update screen title crumb
     const titleMap = {
-      screenContacts: 'Contacts',
-      screenProfile: 'Profile',
-      screenFollowUps: 'Due Queue',
-      screenHistory: 'Logs',
-      screenSettings: 'Config'
+      screenContacts: state.activeQueue.toUpperCase(),
+      screenProfile: 'COCKPIT',
+      screenHistory: 'AUDIT LOGS',
+      screenSettings: 'SETTINGS'
     };
-    document.getElementById('activeScreenTitle').textContent = titleMap[targetScreenId] || 'Dialler';
+    document.getElementById('activeScreenTitle').textContent = titleMap[targetScreenId] || 'DIALLER';
 
-    // Toggle between Default Tab Dock and Profile Action Dock
     const isProfile = targetScreenId === 'screenProfile';
     document.getElementById('dockDefaultView').classList.toggle('hidden', isProfile);
     document.getElementById('dockProfileView').classList.toggle('hidden', !isProfile);
 
-    // Update active tab highlight in default dock
-    document.querySelectorAll('.dock-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.screen === targetScreenId);
+    document.querySelectorAll('.dock-item').forEach(b => {
+      b.classList.toggle('active', b.dataset.screen === targetScreenId);
     });
 
-    if (targetScreenId === 'screenContacts') {
-      applyFiltersAndRender();
-    } else if (targetScreenId === 'screenFollowUps') {
-      renderFollowUpsScreen();
-    } else if (targetScreenId === 'screenHistory') {
-      renderGlobalHistory();
-    }
+    if (targetScreenId === 'screenContacts') applyPipelineFilter();
+    if (targetScreenId === 'screenHistory') renderHistoryScreen();
   }
 
-  // --- 11. Call Return Detection via Visibility API ---
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && state.pendingCallContact) {
-      const elapsed = Date.now() - state.lastCallTimestamp;
-      if (elapsed > 1500) {
-        const promptBar = document.getElementById('callReturnPrompt');
-        document.getElementById('callPromptText').textContent = `Log ${state.pendingCallContact.name}?`;
-        promptBar.classList.remove('hidden');
-      }
-    }
-  });
-
-  // --- 12. Call Disposition Logging (Key 3) ---
-  function openDispositionModal(contact) {
-    if (!contact) return;
-    document.getElementById('dispContactId').value = contact.id;
-    document.getElementById('modalDispTitle').textContent = `Log: ${contact.name}`;
-    document.getElementById('dispOutcome').value = 'Spoke — interested';
-    document.getElementById('dispNote').value = '';
-    document.getElementById('dispFollowUpDate').value = '';
-    document.getElementById('modalDisposition').classList.remove('hidden');
-    document.getElementById('dispOutcome').focus();
-  }
-
-  async function handleDispositionSave(e) {
-    e.preventDefault();
-    const contactId = document.getElementById('dispContactId').value;
-    const outcome = document.getElementById('dispOutcome').value;
-    const note = document.getElementById('dispNote').value;
-    const followUpVal = document.getElementById('dispFollowUpDate').value;
-    const contact = state.contacts.find(c => c.id === contactId);
-
-    if (!contact) return;
-
-    contact.last_contacted_at = new Date().toISOString();
-    if (outcome === 'Do not contact') {
-      contact.status = 'do_not_contact';
-      contact.next_follow_up_at = null;
-    } else {
-      contact.status = 'contacted';
-      contact.next_follow_up_at = followUpVal ? new Date(followUpVal).toISOString() : null;
-    }
-
-    await saveContact(contact);
-    await logInteraction(contact.id, 'call', outcome, note, contact.next_follow_up_at);
-
-    document.getElementById('callReturnPrompt').classList.add('hidden');
-    document.getElementById('modalDisposition').classList.add('hidden');
-    state.pendingCallContact = null;
-
-    applyFiltersAndRender();
-    if (state.currentContactIndex !== -1 && state.filteredContacts[state.currentContactIndex]?.id === contact.id) {
-      renderProfileView(contact);
-    }
-  }
-
-  // --- 13. Email Flow (Key 2) ---
-  function openEmailModal(contact) {
-    if (!contact || !contact.email) {
-      alert('No email registered.');
-      return;
-    }
-
-    state.emailDraftContext = contact;
-    const firstName = contact.name.split(' ')[0] || contact.name;
-    
-    const subject = state.settings.templateSubject
-      .replace('{name}', contact.name)
-      .replace('{first_name}', firstName)
-      .replace('{company}', contact.company || '');
-
-    const body = state.settings.templateBody
-      .replace('{name}', contact.name)
-      .replace('{first_name}', firstName)
-      .replace('{company}', contact.company || '')
-      .replace('{phone}', contact.phone || '');
-
-    document.getElementById('emailTo').value = contact.email;
-    document.getElementById('emailSubject').value = subject;
-    document.getElementById('emailBody').value = body;
-    document.getElementById('emailConfirmNotice').classList.add('hidden');
-    document.getElementById('modalEmail').classList.remove('hidden');
-    document.getElementById('btnLaunchMailto').focus();
-  }
-
-  function launchMailto() {
-    const to = encodeURIComponent(document.getElementById('emailTo').value);
-    const sub = encodeURIComponent(document.getElementById('emailSubject').value);
-    const body = encodeURIComponent(document.getElementById('emailBody').value);
-    
-    window.location.href = `mailto:${to}?subject=${sub}&body=${body}`;
-    document.getElementById('emailConfirmNotice').classList.remove('hidden');
-  }
-
-  function launchGmailWeb() {
-    const to = encodeURIComponent(document.getElementById('emailTo').value);
-    const sub = encodeURIComponent(document.getElementById('emailSubject').value);
-    const body = encodeURIComponent(document.getElementById('emailBody').value);
-
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${sub}&body=${body}`;
-    window.open(url, '_blank');
-    document.getElementById('emailConfirmNotice').classList.remove('hidden');
-  }
-
-  async function confirmEmailSent() {
-    const contact = state.emailDraftContext;
-    if (!contact) return;
-
-    await logInteraction(contact.id, 'email', 'Email Sent', document.getElementById('emailSubject').value, null);
-    contact.last_contacted_at = new Date().toISOString();
-    await saveContact(contact);
-
-    document.getElementById('modalEmail').classList.add('hidden');
-    state.emailDraftContext = null;
-    applyFiltersAndRender();
-    if (state.currentContactIndex !== -1) {
-      renderProfileView(contact);
-    }
-  }
-
-  // --- 14. Follow-Ups & Global History Views ---
-  async function renderFollowUpsScreen() {
-    const container = document.getElementById('followUpsList');
-    const scheduled = state.contacts
-      .filter(c => c.next_follow_up_at && c.status !== 'do_not_contact')
-      .sort((a, b) => new Date(a.next_follow_up_at) - new Date(b.next_follow_up_at));
-
-    if (scheduled.length === 0) {
-      container.innerHTML = '<div class="empty-state-bubble"><p>No scheduled follow-ups.</p></div>';
-      return;
-    }
-
-    const template = document.getElementById('tmpl-contact-card');
-    const fragment = document.createDocumentFragment();
-
-    scheduled.forEach(c => {
-      const clone = template.content.cloneNode(true);
-      const card = clone.querySelector('.bubbly-contact-card');
-      card.dataset.id = c.id;
-
-      card.querySelector('.card-avatar').textContent = getInitials(c.name);
-      card.querySelector('.card-name').textContent = c.name;
-      card.querySelector('.card-meta').textContent = formatDate(c.next_follow_up_at);
-      card.querySelector('.card-submeta').textContent = c.phone || c.email || '';
-      
-      const badge = card.querySelector('.bubbly-badge');
-      const isOverdue = new Date(c.next_follow_up_at) < new Date();
-      badge.className = `bubbly-badge ${isOverdue ? 'badge-due' : 'badge-contacted'}`;
-      badge.textContent = isOverdue ? 'Overdue' : 'Due';
-
-      card.addEventListener('click', () => openContactProfile(c.id));
-      fragment.appendChild(clone);
-    });
-
-    container.replaceChildren(fragment);
-  }
-
-  async function renderGlobalHistory() {
+  async function renderHistoryScreen() {
     const container = document.getElementById('globalHistoryList');
-    const logs = await getAllInteractions();
+    const logs = await getAllAuditLogs();
 
     if (logs.length === 0) {
-      container.innerHTML = '<div class="empty-state-bubble"><p>No interactions logged yet.</p></div>';
+      container.innerHTML = '<div class="bento-box" style="text-align:center;"><p style="color:var(--text-muted);">No logs recorded.</p></div>';
       return;
     }
 
-    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    const template = document.getElementById('tmpl-history-item');
-    const fragment = document.createDocumentFragment();
-
-    logs.slice(0, 40).forEach(log => {
-      const clone = template.content.cloneNode(true);
-      const contact = state.contacts.find(c => c.id === log.contact_id);
-      const contactName = contact ? contact.name : 'Unknown';
-
-      clone.querySelector('.log-type-tag').textContent = `${contactName} • ${log.type.toUpperCase()}`;
-      clone.querySelector('.log-date').textContent = formatDate(log.timestamp);
-      clone.querySelector('.log-outcome').textContent = log.outcome;
-
-      const notesEl = clone.querySelector('.log-note');
-      if (log.note) {
-        notesEl.textContent = log.note;
-        notesEl.classList.remove('hidden');
-      }
-
-      fragment.appendChild(clone);
+    container.replaceChildren();
+    logs.slice(0, 50).forEach(l => {
+      const c = state.contacts.find(x => x.id === l.contact_id);
+      const title = c ? (c.company || c.name || 'Lead') : 'Deleted Lead';
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div class="history-head">
+          <span>${title} • ${l.action.toUpperCase()}</span>
+          <span>${formatDate(l.timestamp)}</span>
+        </div>
+        <div class="history-action">${l.outcome}</div>
+        ${l.note ? `<div style="font-size:0.75rem; color:#b2cfbe;">${l.note}</div>` : ''}
+      `;
+      container.appendChild(div);
     });
-
-    container.replaceChildren(fragment);
   }
 
-  // --- 15. CSV Import Logic ---
-  function handleCsvFileSelect(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target.result;
-        const rows = parseCSV(text);
-        const imported = mapCSVToContacts(rows);
+  // --- 13. Edit Contact Modal ---
+  function openEditModal(contact) {
+    document.getElementById('editContactId').value = contact.id;
+    document.getElementById('editModalHeading').textContent = `Edit: ${contact.company || contact.name || 'Lead'}`;
+    document.getElementById('editCompany').value = contact.company || '';
+    document.getElementById('editName').value = contact.name || '';
+    document.getElementById('editPhone').value = contact.phone || '';
+    document.getElementById('editEmail').value = contact.email || '';
+    document.getElementById('editJobTitle').value = contact.job_title || '';
+    document.getElementById('editNotes').value = contact.notes || '';
 
-        if (imported.length === 0) {
-          alert('No valid contacts in CSV.');
-          return;
-        }
-
-        const phoneMap = new Set();
-        const emailMap = new Set();
-
-        state.contacts.forEach(c => {
-          const norm = normalisePhoneForDial(c.phone);
-          if (norm) phoneMap.add(norm);
-          if (c.email) emailMap.add(c.email.trim().toLowerCase());
-        });
-
-        let duplicatesCount = 0;
-        imported.forEach(c => {
-          const normPhone = normalisePhoneForDial(c.phone);
-          const normEmail = (c.email || '').trim().toLowerCase();
-          if ((normPhone && phoneMap.has(normPhone)) || (normEmail && emailMap.has(normEmail))) {
-            duplicatesCount++;
-          }
-        });
-
-        state.parsedImportData = imported;
-
-        const summaryBox = document.getElementById('importSummaryDetails');
-        summaryBox.replaceChildren();
-
-        const p1 = document.createElement('p');
-        p1.innerHTML = `Parsed: <strong>${imported.length} contacts</strong>`;
-        const p2 = document.createElement('p');
-        p2.innerHTML = `Duplicates: <strong>${duplicatesCount}</strong>`;
-        summaryBox.appendChild(p1);
-        summaryBox.appendChild(p2);
-
-        document.getElementById('modalImportReview').classList.remove('hidden');
-      } catch (err) {
-        alert('CSV Parse error: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
+    document.getElementById('modalEditContact').classList.remove('hidden');
+    document.getElementById('editCompany').focus();
   }
 
-  async function commitImport() {
-    const strategy = document.getElementById('importDuplicateStrategy').value;
-    const incoming = state.parsedImportData;
-    if (!incoming) return;
+  async function handleContactSave(e) {
+    e.preventDefault();
+    const id = document.getElementById('editContactId').value;
+    const contact = state.contacts.find(c => c.id === id);
+    if (!contact) return;
 
-    const phoneMap = new Map();
-    const emailMap = new Map();
+    contact.company = document.getElementById('editCompany').value.trim();
+    contact.name = document.getElementById('editName').value.trim();
+    contact.phone = document.getElementById('editPhone').value.trim();
+    contact.email = document.getElementById('editEmail').value.trim();
+    contact.job_title = document.getElementById('editJobTitle').value.trim();
+    contact.notes = document.getElementById('editNotes').value.trim();
 
-    state.contacts.forEach(c => {
-      const cleanPhone = normalisePhoneForDial(c.phone);
-      if (cleanPhone) phoneMap.set(cleanPhone, c);
-      if (c.email) emailMap.set(c.email.trim().toLowerCase(), c);
-    });
+    await saveContact(contact);
+    document.getElementById('modalEditContact').classList.add('hidden');
+    applyPipelineFilter();
 
-    const tx = dbInstance.transaction('contacts', 'readwrite');
-    const store = tx.objectStore('contacts');
-
-    for (const record of incoming) {
-      const cleanIncomingPhone = normalisePhoneForDial(record.phone);
-      const cleanIncomingEmail = (record.email || '').trim().toLowerCase();
-
-      const duplicate = (cleanIncomingPhone && phoneMap.get(cleanIncomingPhone)) ||
-                        (cleanIncomingEmail && emailMap.get(cleanIncomingEmail));
-
-      if (duplicate) {
-        if (strategy === 'skip') {
-          continue;
-        } else if (strategy === 'overwrite') {
-          record.id = duplicate.id;
-          record.last_contacted_at = duplicate.last_contacted_at;
-          record.next_follow_up_at = duplicate.next_follow_up_at;
-          store.put(record);
-        } else if (strategy === 'keepBoth') {
-          store.put(record);
-        }
-      } else {
-        store.put(record);
-        if (cleanIncomingPhone) phoneMap.set(cleanIncomingPhone, record);
-        if (cleanIncomingEmail) emailMap.set(cleanIncomingEmail, record);
-      }
+    if (state.activeScreenId === 'screenProfile') {
+      renderCockpitView(contact);
     }
-
-    tx.oncomplete = async () => {
-      document.getElementById('modalImportReview').classList.add('hidden');
-      state.parsedImportData = null;
-      document.getElementById('fileCsvInput').value = '';
-      await loadAllContacts();
-      applyFiltersAndRender();
-      alert('Contacts imported.');
-    };
-
-    tx.onerror = (e) => {
-      alert('Error saving import: ' + e.target.error.message);
-    };
   }
 
-  // --- 16. Export & Restore ---
-  function exportContactsCsv() {
-    if (state.contacts.length === 0) {
-      alert('No contacts to export.');
-      return;
-    }
-
-    const headers = ['name', 'phone', 'email', 'company', 'job_title', 'street_address', 'city', 'postal_code', 'country', 'notes', 'status'];
-    const rows = [headers.join(',')];
-
-    state.contacts.forEach(c => {
-      const row = headers.map(h => {
-        let val = (c[h] || '').toString().replace(/"/g, '""');
-        return `"${val}"`;
-      });
-      rows.push(row.join(','));
-    });
-
-    const csvBlob = new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(csvBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `contacts_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function exportJsonBackup() {
-    const logs = await getAllInteractions();
-    const backupData = {
-      version: 1,
-      exported_at: new Date().toISOString(),
-      contacts: state.contacts,
-      interactions: logs,
-      settings: state.settings
-    };
-
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `dialler_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function handleJsonRestore(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const data = JSON.parse(e.target.result);
-        if (!data.contacts || !Array.isArray(data.contacts)) throw new Error('Invalid format');
-
-        const tx = dbInstance.transaction(['contacts', 'interactions', 'settings'], 'readwrite');
-        tx.objectStore('contacts').clear();
-        tx.objectStore('interactions').clear();
-
-        data.contacts.forEach(c => tx.objectStore('contacts').put(c));
-        if (data.interactions) data.interactions.forEach(i => tx.objectStore('interactions').put(i));
-        if (data.settings) tx.objectStore('settings').put({ key: 'app_preferences', value: data.settings });
-
-        tx.oncomplete = async () => {
-          await loadAllContacts();
-          await loadSettings();
-          applyFiltersAndRender();
-          alert('Database restored.');
-        };
-      } catch (err) {
-        alert('Restore failed: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  // --- 17. COMPLETE PHYSICAL KEYPAD (0-9, *, #) & D-PAD ENGINE ---
+  // --- 14. ORTHOGONAL HARDWARE KEYPAD ENGINE (NO OVERLAPPING MAPPINGS) ---
   function setupHardwareKeypadShortcuts() {
     window.addEventListener('keydown', (e) => {
       const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
-      const isInputActive = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+      const inInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // 1. GLOBAL ESCAPE / BACK BUTTON (Hardware Flip Phone Back key)
+      // 1. GLOBAL ESCAPE / HARDWARE BACK BUTTON
       if (e.key === 'Escape' || e.key === 'Backspace') {
-        const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
+        const openModal = document.querySelector('.modal-sheet-backdrop:not(.hidden)');
         if (openModal) {
           openModal.classList.add('hidden');
           e.preventDefault();
           return;
         }
-        if (state.activeScreenId === 'screenProfile') {
+        if (state.activeScreenId === 'screenProfile' || state.activeScreenId === 'screenHistory' || state.activeScreenId === 'screenSettings') {
           switchScreen('screenContacts');
-          e.preventDefault();
-          return;
-        }
-        if (document.getElementById('callReturnPrompt') && !document.getElementById('callReturnPrompt').classList.contains('hidden')) {
-          document.getElementById('callReturnPrompt').classList.add('hidden');
           e.preventDefault();
           return;
         }
       }
 
-      // If typing in input, let normal characters pass through, but handle Enter/Escape
-      if (isInputActive) {
+      // If typing inside an input field, allow text entry
+      if (inInput) {
         if (e.key === 'Enter') {
           if (document.activeElement.id === 'searchInput') {
             document.activeElement.blur();
@@ -1131,327 +845,371 @@
         return;
       }
 
-      // 2. D-PAD NAVIGATION (Arrow Up / Down / Left / Right / Enter)
+      // 2. MODAL-ISOLATED KEYPAD MAPPINGS (PREVENTS BACKGROUND FIRING)
+      const isCallbackOpen = !document.getElementById('modalScheduleCallback').classList.contains('hidden');
+      const isEmailOpen = !document.getElementById('modalEmailPicker').classList.contains('hidden');
+      const isEditOpen = !document.getElementById('modalEditContact').classList.contains('hidden');
+
+      if (isCallbackOpen) {
+        if (e.key === '1') { scheduleCallbackForLead(2); e.preventDefault(); return; }
+        if (e.key === '2') { scheduleCallbackForLead(4); e.preventDefault(); return; }
+        if (e.key === '3') { scheduleCallbackForLead(24); e.preventDefault(); return; }
+        if (e.key === '4') { scheduleCallbackForLead(48); e.preventDefault(); return; }
+        if (e.key === '5') { scheduleCallbackForLead(168); e.preventDefault(); return; }
+        if (e.key === '0') { document.getElementById('modalScheduleCallback').classList.add('hidden'); e.preventDefault(); return; }
+        return;
+      }
+
+      if (isEmailOpen) {
+        const contact = state.filteredContacts[state.currentContactIndex];
+        if (e.key === '1') { if (contact) launchMailtoNative(contact); e.preventDefault(); return; }
+        if (e.key === '2') { if (contact) launchGmailWebTab(contact); e.preventDefault(); return; }
+        if (e.key === '3') { document.getElementById('btnMarkEmailLogged').click(); e.preventDefault(); return; }
+        if (e.key === '0') { document.getElementById('modalEmailPicker').classList.add('hidden'); e.preventDefault(); return; }
+        return;
+      }
+
+      if (isEditOpen) {
+        if (e.key === '0') { document.getElementById('modalEditContact').classList.add('hidden'); e.preventDefault(); return; }
+        return;
+      }
+
+      // 3. COCKPIT (PROFILE) SCREEN - EXCLUSIVE KEYS
+      if (state.activeScreenId === 'screenProfile' && state.currentContactIndex !== -1) {
+        const contact = state.filteredContacts[state.currentContactIndex];
+        switch (e.key) {
+          case '1': // VOICE CALL
+            e.preventDefault();
+            document.getElementById('btnCockpitCall').click();
+            break;
+
+          case '2': // EMAIL DRAWER
+            e.preventDefault();
+            if (contact && contact.email) openEmailPickerSheet(contact);
+            else alert('No email address on file.');
+            break;
+
+          case '3': // DISPOSITION: NO ANSWER (Keeps in Fresh)
+            e.preventDefault();
+            handleDispositionNoAnswer(contact);
+            break;
+
+          case '4': // DISPOSITION: CALL BACK (Opens Schedule)
+            e.preventDefault();
+            openCallbackScheduler(contact);
+            break;
+
+          case '5': // DISPOSITION: CONTACTED (Graduates to Contacted)
+            e.preventDefault();
+            handleDispositionContacted(contact);
+            break;
+
+          case '6': // EDIT LEAD DETAILS
+            e.preventDefault();
+            openEditModal(contact);
+            break;
+
+          case '7': // DISPOSITION: D.N.C. (Purges Contact)
+            e.preventDefault();
+            handleDispositionDNC(contact);
+            break;
+
+          case '0': // RETURN TO LIST
+            e.preventDefault();
+            switchScreen('screenContacts');
+            break;
+        }
+        return;
+      }
+
+      // 4. CONTACTS LIST SCREEN - EXCLUSIVE KEYS
       if (state.activeScreenId === 'screenContacts') {
+        // D-Pad Navigation
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           state.focusedCardIndex++;
-          highlightCurrentCard(true);
+          highlightCard(true);
           return;
         } else if (e.key === 'ArrowUp') {
           e.preventDefault();
           state.focusedCardIndex--;
-          highlightCurrentCard(true);
+          highlightCard(true);
           return;
         } else if (e.key === 'Enter') {
           e.preventDefault();
           if (state.filteredContacts[state.focusedCardIndex]) {
-            openContactProfile(state.filteredContacts[state.focusedCardIndex].id);
+            openCockpit(state.filteredContacts[state.focusedCardIndex].id);
           }
           return;
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          cycleQueue(-1);
-          return;
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          cycleQueue(1);
-          return;
         }
-      } else if (state.activeScreenId === 'screenProfile') {
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          navigateProfile(-1);
-          return;
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          navigateProfile(1);
-          return;
+
+        // Numeric Keypad
+        switch (e.key) {
+          case '1': // DIRECT CALL HIGHLIGHTED LEAD
+            e.preventDefault();
+            const targetLead = state.filteredContacts[state.focusedCardIndex];
+            if (targetLead && targetLead.phone) {
+              const clean = cleanPhoneForDial(targetLead.phone);
+              logAudit(targetLead.id, 'call', 'Dialed', `Quick dial to ${clean}`);
+              window.location.href = `tel:${clean}`;
+            }
+            break;
+
+          case '2': // DIRECT EMAIL HIGHLIGHTED LEAD
+            e.preventDefault();
+            const emailLead = state.filteredContacts[state.focusedCardIndex];
+            if (emailLead && emailLead.email) {
+              openEmailPickerSheet(emailLead);
+            }
+            break;
+
+          case '4': // SWITCH TO AUDIT LOGS
+            e.preventDefault();
+            switchScreen('screenHistory');
+            break;
+
+          case '5': // SEARCH FOCUS
+          case '*':
+            e.preventDefault();
+            document.getElementById('searchInput').focus();
+            break;
+
+          case '6': // SWITCH TO SETUP
+            e.preventDefault();
+            switchScreen('screenSettings');
+            break;
+
+          case '7': // FILTER: FRESH QUEUE
+            e.preventDefault();
+            selectQueue('uncontacted');
+            break;
+
+          case '8': // FILTER: CALL BACK QUEUE
+            e.preventDefault();
+            selectQueue('callback');
+            break;
+
+          case '9': // FILTER: CONTACTED QUEUE
+            e.preventDefault();
+            selectQueue('contacted');
+            break;
+
+          case '0': // RESET SCROLL TO TOP
+            e.preventDefault();
+            state.focusedCardIndex = 0;
+            highlightCard(true);
+            break;
+
+          case '#': // TRIGGER CSV IMPORT
+            e.preventDefault();
+            document.getElementById('fileCsvInput').click();
+            break;
         }
+        return;
       }
 
-      // 3. PHYSICAL NUMERIC KEYPAD SHORTCUTS (1-9, 0, *, #)
-      switch (e.key) {
-        // [Key 1] CALL (or switch to Contacts tab)
-        case '1':
-          if (state.activeScreenId === 'screenProfile') {
-            const callBtn = document.getElementById('btnActionCall');
-            if (callBtn && callBtn.href && callBtn.href !== '#') callBtn.click();
-          } else if (state.activeScreenId === 'screenContacts') {
-            // Direct call highlighted contact!
-            const targetContact = state.filteredContacts[state.focusedCardIndex];
-            if (targetContact && targetContact.phone) {
-              state.lastCallTimestamp = Date.now();
-              state.pendingCallContact = targetContact;
-              window.location.href = `tel:${normalisePhoneForDial(targetContact.phone)}`;
-            } else {
-              switchScreen('screenContacts');
-            }
-          } else {
-            switchScreen('screenContacts');
-          }
-          break;
-
-        // [Key 2] EMAIL (or switch to Due tab)
-        case '2':
-          if (state.activeScreenId === 'screenProfile') {
-            document.getElementById('btnActionEmail').click();
-          } else if (state.activeScreenId === 'screenContacts') {
-            const targetContact = state.filteredContacts[state.focusedCardIndex];
-            if (targetContact) openEmailModal(targetContact);
-            else switchScreen('screenFollowUps');
-          } else {
-            switchScreen('screenFollowUps');
-          }
-          break;
-
-        // [Key 3] LOG CALL OUTCOME (or switch to Logs tab)
-        case '3':
-          if (!document.getElementById('callReturnPrompt').classList.contains('hidden')) {
-            document.getElementById('btnPromptLog').click();
-          } else if (state.activeScreenId === 'screenProfile') {
-            document.getElementById('btnActionDisposition').click();
-          } else if (state.activeScreenId === 'screenContacts') {
-            const targetContact = state.filteredContacts[state.focusedCardIndex];
-            if (targetContact) openDispositionModal(targetContact);
-            else switchScreen('screenHistory');
-          } else {
-            switchScreen('screenHistory');
-          }
-          break;
-
-        // [Key 4] PREV CONTACT (or switch to Config tab)
-        case '4':
-          if (state.activeScreenId === 'screenProfile') {
-            navigateProfile(-1);
-          } else {
-            switchScreen('screenSettings');
-          }
-          break;
-
-        // [Key 5] or [*] SEARCH FOCUS
-        case '5':
-        case '*':
+      // 5. LOGS & SETTINGS SCREENS
+      if (state.activeScreenId === 'screenHistory' || state.activeScreenId === 'screenSettings') {
+        if (e.key === '0' || e.key === '1') {
           e.preventDefault();
-          if (state.activeScreenId !== 'screenContacts') {
-            switchScreen('screenContacts');
-          }
-          document.getElementById('searchInput').focus();
-          break;
-
-        // [Key 6] NEXT CONTACT
-        case '6':
-          if (state.activeScreenId === 'screenProfile') {
-            navigateProfile(1);
-          }
-          break;
-
-        // [Key 7] QUICK EDIT DETAILS (On-the-fly)
-        case '7':
-          if (state.activeScreenId === 'screenProfile' && state.currentContactIndex !== -1) {
-            e.preventDefault();
-            openEditContactModal(state.filteredContacts[state.currentContactIndex]);
-          } else if (state.activeScreenId === 'screenContacts') {
-            const targetContact = state.filteredContacts[state.focusedCardIndex];
-            if (targetContact) openEditContactModal(targetContact);
-          }
-          break;
-
-        // [Key 8] or [#] CYCLE TABS / FILTER QUEUES
-        case '8':
-        case '#':
-          e.preventDefault();
-          cycleQueue(1);
-          break;
-
-        // [Key 9] QUICK CSV IMPORT
-        case '9':
-          document.getElementById('fileCsvInput').click();
-          break;
-
-        // [Key 0] BACK TO LIST / TOP
-        case '0':
-          if (state.activeScreenId === 'screenProfile') {
-            switchScreen('screenContacts');
-          } else if (state.activeScreenId === 'screenContacts') {
-            state.focusedCardIndex = 0;
-            highlightCurrentCard(true);
-          }
-          break;
+          switchScreen('screenContacts');
+        }
       }
     });
   }
 
-  function cycleQueue(dir) {
-    const pills = Array.from(document.querySelectorAll('.bubbly-queue-row .bubbly-pill'));
-    const currentIdx = pills.findIndex(p => p.classList.contains('active'));
-    let nextIdx = currentIdx + dir;
-    if (nextIdx < 0) nextIdx = pills.length - 1;
-    if (nextIdx >= pills.length) nextIdx = 0;
-    pills[nextIdx].click();
+  function selectQueue(q) {
+    document.querySelectorAll('.stage-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.queue === q);
+    });
+    state.activeQueue = q;
+    state.focusedCardIndex = 0;
+    applyPipelineFilter();
   }
 
-  // --- 18. Initialization ---
-  async function initApp() {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      });
-    }
+  // --- 15. CSV Import & Export ---
+  function handleCsvFileSelect(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target.result;
+        const rows = parseCSV(text);
+        const imported = mapCSVToContacts(rows);
 
+        if (imported.length === 0) {
+          alert('No leads detected in CSV.');
+          return;
+        }
+
+        const tx = dbInstance.transaction('contacts', 'readwrite');
+        const store = tx.objectStore('contacts');
+        imported.forEach(c => store.put(c));
+
+        tx.oncomplete = async () => {
+          await loadAllData();
+          applyPipelineFilter();
+          alert(`Imported ${imported.length} leads into Fresh.`);
+        };
+      } catch (err) {
+        alert('CSV import error: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function exportCsvFile() {
+    if (state.contacts.length === 0) {
+      alert('No contacts to export.');
+      return;
+    }
+    const headers = ['company', 'name', 'phone', 'email', 'job_title', 'stage', 'attempts', 'notes'];
+    const rows = [headers.join(',')];
+
+    state.contacts.forEach(c => {
+      const r = headers.map(h => `"${(c[h] || '').toString().replace(/"/g, '""')}"`);
+      rows.push(r.join(','));
+    });
+
+    const blob = new Blob([rows.join('\r\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leads_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // --- 16. App Initialization ---
+  async function initApp() {
     await initDB();
     await loadSettings();
-    await loadAllContacts();
+    await loadAllData();
 
-    document.getElementById('templateSubject').value = state.settings.templateSubject;
-    document.getElementById('templateBody').value = state.settings.templateBody;
-    document.getElementById('inputDailyCallTarget').value = state.settings.dailyTargetCalls || 10;
+    document.getElementById('inputDailyCallTarget').value = state.settings.dailyCallTarget || 10;
+    
+    // Setup Template Selector in Settings
+    const tmplSelect = document.getElementById('templateSelector');
+    tmplSelect.replaceChildren();
+    Object.values(state.emailTemplates).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.title;
+      tmplSelect.appendChild(opt);
+    });
+
+    const loadTemplateToSettings = (id) => {
+      const t = state.emailTemplates[id] || state.emailTemplates.intro;
+      document.getElementById('templateSubject').value = t.subject;
+      document.getElementById('templateBody').value = t.body;
+    };
+
+    tmplSelect.onchange = (e) => loadTemplateToSettings(e.target.value);
+    loadTemplateToSettings(tmplSelect.value);
+
+    document.getElementById('btnSaveTemplate').onclick = async () => {
+      const id = tmplSelect.value;
+      if (state.emailTemplates[id]) {
+        state.emailTemplates[id].subject = document.getElementById('templateSubject').value;
+        state.emailTemplates[id].body = document.getElementById('templateBody').value;
+        await persistSettings();
+        alert('Template saved!');
+      }
+    };
+
+    document.getElementById('btnSaveTarget').onclick = async () => {
+      state.settings.dailyCallTarget = parseInt(document.getElementById('inputDailyCallTarget').value, 10) || 10;
+      await persistSettings();
+      refreshTelemetryHUD();
+      alert('Goal saved!');
+    };
+
+    // Stage Tab Clicks
+    document.querySelectorAll('.stage-tab').forEach(tab => {
+      tab.addEventListener('click', (e) => selectQueue(e.currentTarget.dataset.queue));
+    });
 
     // Search events
     const searchInput = document.getElementById('searchInput');
-    const clearSearch = document.getElementById('btnClearSearch');
+    const clearBtn = document.getElementById('btnClearSearch');
     searchInput.addEventListener('input', (e) => {
       state.searchQuery = e.target.value;
-      clearSearch.classList.toggle('hidden', !state.searchQuery);
-      applyFiltersAndRender();
+      clearBtn.classList.toggle('hidden', !state.searchQuery);
+      applyPipelineFilter();
     });
-    clearSearch.addEventListener('click', () => {
+    clearBtn.addEventListener('click', () => {
       searchInput.value = '';
       state.searchQuery = '';
-      clearSearch.classList.add('hidden');
-      applyFiltersAndRender();
+      clearBtn.classList.add('hidden');
+      applyPipelineFilter();
     });
 
-    // Queue tab pills
-    document.querySelectorAll('.bubbly-queue-row .bubbly-pill').forEach(pill => {
-      pill.addEventListener('click', (e) => {
-        document.querySelectorAll('.bubbly-queue-row .bubbly-pill').forEach(p => p.classList.remove('active'));
-        e.currentTarget.classList.add('active');
-        state.activeQueue = e.currentTarget.dataset.queue;
-        state.focusedCardIndex = 0;
-        applyFiltersAndRender();
-      });
+    // Callback choices
+    document.querySelectorAll('.quick-choice-grid .btn-choice').forEach(b => {
+      b.addEventListener('click', (e) => scheduleCallbackForLead(parseInt(e.currentTarget.dataset.hours, 10)));
     });
 
-    // Bottom Navigation tab clicks
-    document.querySelectorAll('.dock-btn').forEach(btn => {
-      btn.addEventListener('click', () => switchScreen(btn.dataset.screen));
+    document.getElementById('btnConfirmCallbackSchedule').onclick = () => {
+      const val = document.getElementById('customCallbackInput').value;
+      if (!val) { alert('Pick a time option or pick custom date.'); return; }
+      scheduleCallbackForLead(0, val);
+    };
+
+    document.getElementById('btnCancelCallback').onclick = () => {
+      document.getElementById('modalScheduleCallback').classList.add('hidden');
+    };
+    document.getElementById('btnCloseCallbackSheet').onclick = () => {
+      document.getElementById('modalScheduleCallback').classList.add('hidden');
+    };
+
+    // Bottom Dock navigation
+    document.querySelectorAll('.dock-item').forEach(btn => {
+      btn.onclick = () => switchScreen(btn.dataset.screen);
     });
 
-    // Profile Context Dock Buttons
-    document.getElementById('btnProfileBack').addEventListener('click', () => switchScreen('screenContacts'));
-    document.getElementById('btnProfileEdit').addEventListener('click', () => {
+    document.getElementById('btnDockBack').onclick = () => switchScreen('screenContacts');
+    document.getElementById('btnDockEdit').onclick = () => {
       if (state.currentContactIndex !== -1) {
-        openEditContactModal(state.filteredContacts[state.currentContactIndex]);
+        openEditModal(state.filteredContacts[state.currentContactIndex]);
       }
-    });
+    };
 
-    document.getElementById('btnActionDisposition').addEventListener('click', () => {
-      if (state.currentContactIndex !== -1) {
-        openDispositionModal(state.filteredContacts[state.currentContactIndex]);
-      }
-    });
-
-    document.getElementById('btnActionEmail').addEventListener('click', () => {
-      if (state.currentContactIndex !== -1) {
-        openEmailModal(state.filteredContacts[state.currentContactIndex]);
-      }
-    });
-
-    // Edit Modal events
-    document.getElementById('btnCloseModalEdit').addEventListener('click', () => {
+    // Modals Close & Submit
+    document.getElementById('btnCancelEmail').onclick = () => {
+      document.getElementById('modalEmailPicker').classList.add('hidden');
+    };
+    document.getElementById('btnCloseEmailSheet').onclick = () => {
+      document.getElementById('modalEmailPicker').classList.add('hidden');
+    };
+    document.getElementById('btnCancelEdit').onclick = () => {
       document.getElementById('modalEditContact').classList.add('hidden');
-    });
-    document.getElementById('btnCancelEdit').addEventListener('click', () => {
+    };
+    document.getElementById('btnCloseEditSheet').onclick = () => {
       document.getElementById('modalEditContact').classList.add('hidden');
-    });
-    document.getElementById('formEditContact').addEventListener('submit', handleEditContactSave);
+    };
+    document.getElementById('formEditContact').onsubmit = handleContactSave;
 
-    // Disposition modal events
-    document.getElementById('btnCloseModalDisp').addEventListener('click', () => {
-      document.getElementById('modalDisposition').classList.add('hidden');
-    });
-    document.getElementById('btnCancelDisp').addEventListener('click', () => {
-      document.getElementById('modalDisposition').classList.add('hidden');
-    });
-    document.getElementById('formDisposition').addEventListener('submit', handleDispositionSave);
-
-    // Call return prompt events
-    document.getElementById('btnPromptLog').addEventListener('click', () => {
-      openDispositionModal(state.pendingCallContact);
-    });
-    document.getElementById('btnPromptDismiss').addEventListener('click', () => {
-      document.getElementById('callReturnPrompt').classList.add('hidden');
-      state.pendingCallContact = null;
-    });
-
-    // Email modal events
-    document.getElementById('btnCloseModalEmail').addEventListener('click', () => {
-      document.getElementById('modalEmail').classList.add('hidden');
-    });
-    document.getElementById('btnLaunchMailto').addEventListener('click', launchMailto);
-    document.getElementById('btnLaunchGmailWeb').addEventListener('click', launchGmailWeb);
-    document.getElementById('btnConfirmEmailSent').addEventListener('click', confirmEmailSent);
-    document.getElementById('btnCancelEmailSent').addEventListener('click', () => {
-      document.getElementById('modalEmail').classList.add('hidden');
-    });
-
-    // CSV Import events
-    document.getElementById('btnQuickImport').addEventListener('click', () => {
-      document.getElementById('fileCsvInput').click();
-    });
+    // CSV File Operations
     document.getElementById('fileCsvInput').addEventListener('change', (e) => {
       if (e.target.files.length > 0) handleCsvFileSelect(e.target.files[0]);
     });
-    document.getElementById('btnCommitImport').addEventListener('click', commitImport);
-    document.getElementById('btnCancelImport').addEventListener('click', () => {
-      document.getElementById('modalImportReview').classList.add('hidden');
-      document.getElementById('fileCsvInput').value = '';
-    });
-    document.getElementById('btnCloseModalImport').addEventListener('click', () => {
-      document.getElementById('modalImportReview').classList.add('hidden');
-      document.getElementById('fileCsvInput').value = '';
-    });
+    document.getElementById('btnExportCsv').onclick = exportCsvFile;
 
-    // Settings actions
-    document.getElementById('btnSaveTargetGoal').addEventListener('click', async () => {
-      const val = parseInt(document.getElementById('inputDailyCallTarget').value, 10);
-      if (val > 0) {
-        state.settings.dailyTargetCalls = val;
-        await saveSettings();
-        await updateAmbientStatus();
-        alert('Goal saved.');
-      }
-    });
-
-    document.getElementById('btnSaveTemplate').addEventListener('click', async () => {
-      state.settings.templateSubject = document.getElementById('templateSubject').value;
-      state.settings.templateBody = document.getElementById('templateBody').value;
-      await saveSettings();
-      alert('Template saved.');
-    });
-
-    document.getElementById('btnExportCsv').addEventListener('click', exportContactsCsv);
-    document.getElementById('btnExportJsonBackup').addEventListener('click', exportJsonBackup);
-    document.getElementById('fileJsonRestore').addEventListener('change', (e) => {
-      if (e.target.files.length > 0) handleJsonRestore(e.target.files[0]);
-    });
-
-    document.getElementById('btnClearAllData').addEventListener('click', () => {
-      if (confirm('Erase all local contacts and logs?')) {
+    document.getElementById('btnClearAllData').onclick = async () => {
+      if (confirm('Permanently wipe ALL local records?')) {
         const tx = dbInstance.transaction(['contacts', 'interactions'], 'readwrite');
         tx.objectStore('contacts').clear();
         tx.objectStore('interactions').clear();
         tx.oncomplete = () => {
           state.contacts = [];
-          applyFiltersAndRender();
-          alert('Local data cleared.');
+          applyPipelineFilter();
+          alert('Database cleared.');
         };
       }
-    });
+    };
 
     setupHardwareKeypadShortcuts();
-    applyFiltersAndRender();
+    applyPipelineFilter();
   }
 
   if (document.readyState === 'loading') {
