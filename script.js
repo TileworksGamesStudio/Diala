@@ -17,26 +17,26 @@
     intro: {
       id: 'intro',
       title: 'Introduction',
-      subject: 'Connecting regarding {company}',
-      body: 'Hi {first_name},\n\nJust attempted to reach you by phone. Wanted to share a quick overview of how we assist teams like {company}.\n\nAre you available for a brief 5-minute call tomorrow?\n\nBest regards,\n[Your Name]\n[Your Phone]'
+      subject: 'Great speaking earlier – CannaGames resources for {company}',
+      body: 'Hi {first_name},\n\nThank you for taking the time to speak with me earlier. I really appreciate the opportunity to introduce myself to {company}.\n\nTo recap: my name is Christian John, founder of Tileworks Studio. I’m developing a free educational web app that helps improve cannabis knowledge through fun, engaging puzzle games.\n\nThe aim is to improve cannabis education, focusing on the plant, products, science, strains, and the wider world of cannabis. By helping staff become confident, knowledgeable educators, we can build customer trust, improve experiences, and nurture a stronger culture of learning within the workplace.\n\nCannaGames is completely free, with no adverts, no personal data collection, and no payments required.\n\nYou can explore the app here:\n<a href="https://tileworksgamesstudio.github.io/CannaGames-Home/">https://tileworksgamesstudio.github.io/CannaGames-Home/</a>\n\nI’d really appreciate your support in helping the project reach your team. Sharing the app with your staff, encouraging them to try it, or passing it on to other businesses that may benefit would make a real difference. Any feedback would also be greatly appreciated.\n\nOur goal is to keep cannabis education accessible to everyone. Optional donations help us maintain the ad-free app and fund future updates and educational content:\n<a href="https://buy.stripe.com/14AbJ0czm3Ct3ARdPgefC0U">https://buy.stripe.com/14AbJ0czm3Ct3ARdPgefC0U</a>\n\nThank you again for your time. I hope CannaGames can be a useful resource for your team and the wider cannabis industry.\n\nKind regards,\n\nChristian John\nFounder, Tileworks Studio'
     },
     followup: {
       id: 'followup',
       title: 'Post-Call Follow-Up',
       subject: 'Following up on our conversation — {first_name}',
-      body: 'Hi {first_name},\n\nGreat speaking with you just now. As discussed, I am following up with the relevant details for {company}.\n\nLet me know if you have any questions.\n\nBest regards,\n[Your Name]'
+      body: 'Hi {first_name},\n\nGreat speaking with you just now. As discussed, I am following up with the relevant details for {company}.\n\nLet me know if you have any questions.\n\nBest regards,\nChristian John'
     },
     voicemail: {
       id: 'voicemail',
       title: 'Left Voicemail',
       subject: 'Just left you a voicemail / {company}',
-      body: 'Hi {first_name},\n\nI just left you a quick voicemail on {phone}. Please let me know when you might have 3 minutes to connect.\n\nBest regards,\n[Your Name]'
+      body: 'Hi {first_name},\n\nI just left you a quick voicemail on {phone}. Please let me know when you might have 3 minutes to connect.\n\nBest regards,\nChristian John'
     },
     reconnect: {
       id: 'reconnect',
       title: 'Check-In',
       subject: 'Checking in — {company}',
-      body: 'Hi {first_name},\n\nCircling back on our previous touchpoint. Would love to get a brief update on your schedule this week.\n\nBest regards,\n[Your Name]'
+      body: 'Hi {first_name},\n\nCircling back on our previous touchpoint. Would love to get a brief update on your schedule this week.\n\nBest regards,\nChristian John'
     }
   };
 
@@ -289,13 +289,20 @@
   async function loadSettings() {
     return new Promise((resolve) => {
       const store = dbStore('settings', 'readonly');
-      store.get('app_prefs').onsuccess = (e) => {
+      store.get('app_prefs').onsuccess = async (e) => {
         if (e.target.result && e.target.result.val) {
           state.settings = { ...state.settings, ...e.target.result.val.settings };
           if (e.target.result.val.templates) {
             state.emailTemplates = { ...state.emailTemplates, ...e.target.result.val.templates };
           }
         }
+
+        // Automatic upgrade to hyperlinked template if older unlinked or default template is stored
+        if (!state.emailTemplates.intro || !state.emailTemplates.intro.body.includes('<a href=')) {
+          state.emailTemplates.intro = DEFAULT_EMAIL_TEMPLATES.intro;
+          await persistSettings();
+        }
+
         resolve(true);
       };
     });
