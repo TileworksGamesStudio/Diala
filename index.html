@@ -3,101 +3,172 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="Chunky, high-contrast British Racing Green & Gold personal dialer for flip phones.">
-  <meta name="theme-color" content="#020d07">
+  <meta name="description" content="Professional British Racing Green & 24K Gold Personal Cockpit Dialer for Flip Devices">
+  <meta name="theme-color" content="#010804">
   <title>FlipDialler Pro</title>
+  <link rel="manifest" href="manifest.json">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="density-normal">
   <div id="app" class="app-container">
 
-    <!-- 1. Ambient Micro Telemetry HUD -->
+    <!-- 1. Ambient Micro-Telemetry HUD -->
     <header class="hud-bar" role="banner">
       <div class="hud-left">
         <span class="hud-gold-emblem">✦</span>
         <span id="activeScreenTitle" class="hud-title">FRESH</span>
       </div>
       <div class="hud-right">
-        <div class="hud-pill" title="Daily calls">
+        <div id="hudPowerIndicator" class="hud-pill hud-pill-power hidden" title="Power Dialer Active">
+          <span>⚡ AUTO</span>
+        </div>
+        <div class="hud-pill" title="Daily Pace and Consistency Streak">
           <span class="hud-icon">🔥</span>
           <span id="hudCallCount">0/10</span>
+          <span id="hudStreakBadge" class="streak-badge">0d</span>
         </div>
-        <div class="hud-pill" title="Callbacks due">
+        <div class="hud-pill" title="Callbacks Due">
           <span class="hud-dot-warning"></span>
           <span id="hudDueCount">0 Due</span>
         </div>
       </div>
     </header>
 
-    <!-- 2. Main Viewport -->
+    <!-- Ephemeral 5-Second Undo Safety Toast -->
+    <aside id="undoToast" class="undo-toast hidden" role="alert" aria-live="polite">
+      <div class="undo-content">
+        <span id="undoMessage">Action Processed</span>
+        <div class="undo-timer-bar"><div id="undoTimerProgress"></div></div>
+      </div>
+      <button id="btnTriggerUndo" class="btn btn-gold btn-micro"><span class="key-badge">0</span> UNDO</button>
+    </aside>
+
+    <!-- Power-Dialer Auto-Advance Overlay -->
+    <aside id="powerDialOverlay" class="power-countdown-overlay hidden" role="dialog" aria-modal="true">
+      <div class="power-card">
+        <div class="power-head">⚡ POWER DIALER</div>
+        <div id="powerCountdownNumber" class="power-timer-giant">3</div>
+        <div id="powerNextName" class="power-next-lead">Next Contact...</div>
+        <button id="btnCancelPowerCountdown" class="btn btn-subtle btn-sm mt-2"><span class="key-badge">0</span> Abort Run</button>
+      </div>
+    </aside>
+
+    <!-- 2. Dynamic Viewport -->
     <main class="app-viewport" id="appViewport">
 
-      <!-- ================= SCREEN: CONTACTS LIST ================= -->
-      <section id="screenContacts" class="screen-view active">
-        <!-- Pipeline Stage Ribbon -->
+      <!-- SCREEN: CONTACTS LIST -->
+      <section id="screenContacts" class="screen-view active" role="region" aria-label="Contacts Queue">
         <div class="stage-ribbon" role="tablist">
-          <button class="stage-tab active" data-queue="uncontacted" role="tab">
+          <button class="stage-tab active" data-queue="uncontacted" role="tab" aria-selected="true">
             <span class="key-badge">7</span> Fresh (<span id="countUncontacted">0</span>)
           </button>
-          <button class="stage-tab" data-queue="callback" role="tab">
-            <span class="key-badge">8</span> Call Back (<span id="countCallback">0</span>)
+          <button class="stage-tab" data-queue="callback" role="tab" aria-selected="false">
+            <span class="key-badge">8</span> Due (<span id="countCallback">0</span>)
           </button>
-          <button class="stage-tab" data-queue="contacted" role="tab">
-            <span class="key-badge">9</span> Contacted (<span id="countContacted">0</span>)
+          <button class="stage-tab" data-queue="contacted" role="tab" aria-selected="false">
+            <span class="key-badge">9</span> Spoken (<span id="countContacted">0</span>)
           </button>
-          <button class="stage-tab" data-queue="all" role="tab">
-            All
-          </button>
+          <button class="stage-tab" data-queue="all" role="tab" aria-selected="false">All</button>
         </div>
 
-        <!-- Search Bar -->
         <div class="search-bubble">
           <span class="search-icon">🔍</span>
-          <input type="search" id="searchInput" placeholder="Search... [Key 5 or *]" autocomplete="off">
+          <input type="search" id="searchInput" placeholder="Search / T9 Multi-Tap [Key 5 or *]" autocomplete="off" autocorrect="off" autocapitalize="none">
           <button id="btnClearSearch" class="btn-clear hidden">&times;</button>
         </div>
 
-        <!-- Chunky Contact Cards List -->
         <div id="contactList" class="bento-card-list" role="list"></div>
       </section>
 
-      <!-- ================= SCREEN: CALL COCKPIT (PROFILE) ================= -->
-      <section id="screenProfile" class="screen-view hidden">
-        <div id="profileCockpit" class="cockpit-container">
-          <!-- Injected via tmpl-cockpit -->
-        </div>
+      <!-- SCREEN: COCKPIT -->
+      <section id="screenProfile" class="screen-view hidden" role="region" aria-label="Lead Cockpit">
+        <div id="profileCockpit" class="cockpit-container"></div>
       </section>
 
-      <!-- ================= SCREEN: LOGS ================= -->
-      <section id="screenHistory" class="screen-view hidden">
-        <div class="section-title-strip">
-          <h2>Audit &amp; Interaction Logs</h2>
+      <!-- SCREEN: AUDIT LOGS -->
+      <section id="screenHistory" class="screen-view hidden" role="region" aria-label="Audit Logs">
+        <div class="history-controls">
+          <div class="search-bubble">
+            <span class="search-icon">🔍</span>
+            <input type="search" id="searchHistoryInput" placeholder="Filter interactions..." autocomplete="off">
+          </div>
+          <div class="history-filter-pills" id="historyFilterGroup">
+            <button class="hist-pill active" data-action="all">All</button>
+            <button class="hist-pill" data-action="call">Calls</button>
+            <button class="hist-pill" data-action="email">Emails</button>
+            <button class="hist-pill" data-action="sms">SMS</button>
+            <button class="hist-pill" data-action="disposition">Stage</button>
+          </div>
         </div>
-        <div id="globalHistoryList" class="history-card-list"></div>
+        <div id="globalHistoryList" class="history-card-list" role="feed"></div>
       </section>
 
-      <!-- ================= SCREEN: SETTINGS & TEMPLATES ================= -->
-      <section id="screenSettings" class="screen-view hidden">
+      <!-- SCREEN: SETTINGS & SETUP -->
+      <section id="screenSettings" class="screen-view hidden" role="region" aria-label="Settings">
         <div class="bento-box">
-          <h3 class="bento-box-title">Daily Call Target</h3>
-          <div class="flex-row">
-            <input type="number" id="inputDailyCallTarget" min="1" max="150" class="chunky-input" value="10">
-            <button id="btnSaveTarget" class="btn btn-gold btn-sm">Save</button>
+          <h3 class="bento-box-title">Display &amp; Audio Ergonomics</h3>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="selectTextDensity">Screen Density</label>
+              <select id="selectTextDensity" class="chunky-input">
+                <option value="density-compact">Compact</option>
+                <option value="density-normal" selected>Standard Balanced</option>
+                <option value="density-large">Chunky / High-Vis</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="selectHapticsSound">Sensory Feedback</label>
+              <select id="selectHapticsSound" class="chunky-input">
+                <option value="all">Synth + Haptics</option>
+                <option value="vibrate">Haptics Only</option>
+                <option value="sound">Synth Only</option>
+                <option value="mute">Muted</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group mt-2">
+            <label class="checkbox-label">
+              <input type="checkbox" id="checkWakeLock" checked>
+              <span>Keep screen awake during runs (WakeLock)</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="checkPowerDialer">
+              <span>Enable Auto-Advance Power-Dialer Mode</span>
+            </label>
           </div>
         </div>
 
         <div class="bento-box">
-          <h3 class="bento-box-title">Import Leads CSV</h3>
+          <h3 class="bento-box-title">Daily Call Target &amp; Analytics</h3>
+          <div class="flex-row">
+            <input type="number" id="inputDailyCallTarget" min="1" max="250" class="chunky-input" value="10">
+            <button id="btnSaveTarget" class="btn btn-gold btn-sm">Save</button>
+            <button id="btnOpenAnalytics" class="btn btn-emerald btn-sm">📊 Stats</button>
+          </div>
+        </div>
+
+        <div class="bento-box">
+          <h3 class="bento-box-title">Import Leads (Deduplicating CSV)</h3>
+          <div class="form-group mb-2">
+            <label for="selectDupHandling">Duplicate Policy</label>
+            <select id="selectDupHandling" class="chunky-input">
+              <option value="skip" selected>Skip duplicates (Safe)</option>
+              <option value="update">Overwrite details</option>
+              <option value="allow">Allow duplicates</option>
+            </select>
+          </div>
           <input type="file" id="fileCsvInput" accept=".csv,text/csv,text/plain" class="hidden-input">
           <label for="fileCsvInput" class="btn btn-gold btn-block">
-            <span class="key-badge">#</span> Select CSV File
+            <span class="key-badge">#</span> Select Leads CSV
           </label>
         </div>
 
         <div class="bento-box">
-          <h3 class="bento-box-title">Active Email Templates</h3>
+          <h3 class="bento-box-title">Message Templates (AST Tokens)</h3>
           <div class="form-group">
-            <label for="templateSelector">Choose Template to Edit</label>
+            <label for="templateSelector">Template</label>
             <select id="templateSelector" class="chunky-input"></select>
           </div>
           <div class="form-group">
@@ -105,30 +176,31 @@
             <input type="text" id="templateSubject" class="chunky-input">
           </div>
           <div class="form-group">
-            <label for="templateBody">Body</label>
+            <label for="templateBody">Body ({first_name|fallback}, {company}, {greeting}, {phone})</label>
             <textarea id="templateBody" class="chunky-input" rows="4"></textarea>
           </div>
           <button id="btnSaveTemplate" class="btn btn-gold btn-sm">Save Template</button>
         </div>
 
         <div class="bento-box">
-          <h3 class="bento-box-title">Data Management</h3>
+          <h3 class="bento-box-title">Data Integrity &amp; Reports</h3>
           <div class="btn-stack">
-            <button id="btnExportCsv" class="btn btn-subtle btn-sm">Export Contacts CSV</button>
-            <button id="btnExportJson" class="btn btn-subtle btn-sm">Export Full Backup (JSON)</button>
-            <label for="fileJsonRestore" class="btn btn-subtle btn-sm text-center">Restore JSON</label>
+            <button id="btnExportContactsCsv" class="btn btn-subtle btn-sm">Export Contacts CSV</button>
+            <button id="btnExportLogsCsv" class="btn btn-subtle btn-sm">Export Audit Logs CSV</button>
+            <button id="btnExportJson" class="btn btn-gold btn-sm">Export Checksummed Backup (JSON)</button>
+            <label for="fileJsonRestore" class="btn btn-subtle btn-sm text-center">Restore Database (JSON)</label>
             <input type="file" id="fileJsonRestore" accept=".json,application/json" class="hidden-input">
           </div>
         </div>
 
         <div class="bento-box danger-box">
-          <button id="btnClearAllData" class="btn btn-danger btn-block">Purge All Database Leads</button>
+          <button id="btnClearAllData" class="btn btn-danger btn-block">Purge Entire Database</button>
         </div>
       </section>
     </main>
 
-    <!-- 3. Permanent Non-Overlapping Bottom Dock -->
-    <footer class="app-dock">
+    <!-- 3. Non-Overlapping Hardware Bottom Dock -->
+    <footer class="app-dock" role="navigation">
       <div id="dockDefaultView" class="dock-row">
         <button class="dock-item active" data-screen="screenContacts">
           <span class="d-key">0</span> Leads
@@ -141,25 +213,25 @@
         </button>
       </div>
 
-      <!-- Quick Context Profile Bar -->
       <div id="dockProfileView" class="dock-row hidden">
         <button id="btnDockBack" class="dock-action-btn dock-back">
           <span class="d-key">0</span> Back
         </button>
+        <button id="btnDockObjections" class="dock-action-btn dock-objections">
+          <span class="d-key">*</span> Script
+        </button>
         <button id="btnDockEdit" class="dock-action-btn dock-edit">
-          <span class="d-key">6</span> Edit Details
+          <span class="d-key">8</span> Edit
         </button>
       </div>
     </footer>
 
-    <!-- ================= MODALS & DRAWERS ================= -->
-
-    <!-- Quick Call-Back Scheduler Drawer -->
-    <div id="modalScheduleCallback" class="modal-sheet-backdrop hidden">
+    <!-- MODAL: Quick Callback Scheduler -->
+    <div id="modalScheduleCallback" class="modal-sheet-backdrop hidden" role="dialog" aria-modal="true">
       <div class="modal-sheet">
         <div class="sheet-head">
           <h3>Set Call Back Time</h3>
-          <button id="btnCloseCallbackSheet" class="btn-clear">&times;</button>
+          <button id="btnCloseCallbackSheet" class="btn-clear" aria-label="Close">&times;</button>
         </div>
         <div class="sheet-body">
           <div class="quick-choice-grid">
@@ -170,7 +242,7 @@
             <button class="btn btn-choice" data-hours="168"><span class="key-badge">5</span> Next Week</button>
           </div>
           <div class="form-group mt-2">
-            <label for="customCallbackInput">Or pick custom date &amp; time:</label>
+            <label for="customCallbackInput">Or Select Date &amp; Time:</label>
             <input type="datetime-local" id="customCallbackInput" class="chunky-input">
           </div>
           <div class="sheet-foot flex-row mt-2">
@@ -181,19 +253,19 @@
       </div>
     </div>
 
-    <!-- Quick Email Launch Sheet -->
-    <div id="modalEmailPicker" class="modal-sheet-backdrop hidden">
+    <!-- MODAL: Rapid Email & SMS Dispatch -->
+    <div id="modalEmailPicker" class="modal-sheet-backdrop hidden" role="dialog" aria-modal="true">
       <div class="modal-sheet">
         <div class="sheet-head">
-          <h3>Send Rapid Email</h3>
-          <button id="btnCloseEmailSheet" class="btn-clear">&times;</button>
+          <h3 id="modalCommTitle">Send Rapid Communication</h3>
+          <button id="btnCloseEmailSheet" class="btn-clear" aria-label="Close">&times;</button>
         </div>
         <div class="sheet-body">
           <div class="form-group">
             <label for="pickerTemplateSelect">Template</label>
             <select id="pickerTemplateSelect" class="chunky-input"></select>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="groupDraftSubject">
             <label for="draftSubject">Subject</label>
             <input type="text" id="draftSubject" class="chunky-input">
           </div>
@@ -202,7 +274,7 @@
             <textarea id="draftBody" class="chunky-input" rows="4"></textarea>
           </div>
           <div class="btn-grid-2">
-            <button id="btnLaunchMailtoApp" class="btn btn-gold btn-block"><span class="key-badge">1</span> Open Mail App</button>
+            <button id="btnLaunchMailtoApp" class="btn btn-gold btn-block"><span class="key-badge">1</span> Open Client</button>
             <button id="btnLaunchWebGmail" class="btn btn-subtle btn-block"><span class="key-badge">2</span> Gmail Web</button>
           </div>
           <div class="btn-grid-2 mt-2">
@@ -213,30 +285,30 @@
       </div>
     </div>
 
-    <!-- Edit Contact Modal -->
-    <div id="modalEditContact" class="modal-sheet-backdrop hidden">
+    <!-- MODAL: Edit Contact with Speech Dictation -->
+    <div id="modalEditContact" class="modal-sheet-backdrop hidden" role="dialog" aria-modal="true">
       <div class="modal-sheet">
         <div class="sheet-head">
           <h3 id="editModalHeading">Edit Contact</h3>
-          <button id="btnCloseEditSheet" class="btn-clear">&times;</button>
+          <button id="btnCloseEditSheet" class="btn-clear" aria-label="Close">&times;</button>
         </div>
         <form id="formEditContact" class="sheet-body">
           <input type="hidden" id="editContactId">
           <div class="form-group">
-            <label for="editCompany">Business / Company Name</label>
+            <label for="editCompany">Business Name</label>
             <input type="text" id="editCompany" class="chunky-input" autocomplete="off">
           </div>
           <div class="form-group">
-            <label for="editName">Contact Full Name</label>
+            <label for="editName">Contact Person</label>
             <input type="text" id="editName" class="chunky-input" autocomplete="off">
           </div>
           <div class="form-grid-2">
             <div class="form-group">
-              <label for="editPhone">Phone</label>
+              <label for="editPhone">Direct Phone</label>
               <input type="tel" id="editPhone" class="chunky-input" autocomplete="off">
             </div>
             <div class="form-group">
-              <label for="editEmail">Email</label>
+              <label for="editEmail">Direct Email</label>
               <input type="email" id="editEmail" class="chunky-input" autocomplete="off">
             </div>
           </div>
@@ -245,29 +317,97 @@
             <input type="text" id="editJobTitle" class="chunky-input" autocomplete="off">
           </div>
           <div class="form-group">
-            <label for="editNotes">Notes</label>
-            <textarea id="editNotes" class="chunky-input" rows="2"></textarea>
+            <div class="box-head-row">
+              <label for="editNotes">Call Notes</label>
+              <button type="button" id="btnDictateNotes" class="btn-micro" title="Web Speech Recognition">🎙️ Dictate</button>
+            </div>
+            <textarea id="editNotes" class="chunky-input" rows="3"></textarea>
           </div>
           <div class="sheet-foot flex-row">
             <button type="button" id="btnCancelEdit" class="btn btn-subtle btn-block"><span class="key-badge">0</span> Cancel</button>
-            <button type="submit" class="btn btn-gold btn-block">Save Changes</button>
+            <button type="submit" class="btn btn-gold btn-block">Save</button>
           </div>
         </form>
       </div>
     </div>
 
+    <!-- MODAL: Script & Objection Handling Prompter -->
+    <div id="modalObjectionsDrawer" class="modal-sheet-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="modal-sheet">
+        <div class="sheet-head">
+          <h3>⚡ Script &amp; Objections [*]</h3>
+          <button id="btnCloseObjectionsSheet" class="btn-clear" aria-label="Close">&times;</button>
+        </div>
+        <div class="sheet-body objection-scroll-body">
+          <div class="pitch-card">
+            <h4>Value Proposition Hook (10s)</h4>
+            <p>"Hi [Name], Christian here from Tileworks. We created a 100% free puzzle web app that trains dispensary teams on strains, terpenes, and science without manuals. Who handles your staff education?"</p>
+          </div>
+          <div class="objection-card">
+            <span class="obj-trigger">"Not interested / Too busy"</span>
+            <p><strong>Rebuttal:</strong> "Completely understand. It is 100% free with no account setup. Can I send a 20-second email link to test on your phone later?"</p>
+          </div>
+          <div class="objection-card">
+            <span class="obj-trigger">"Just send an email"</span>
+            <p><strong>Rebuttal:</strong> "Will do right away. What's the best direct inbox to ensure it doesn't get buried in general promotions?"</p>
+          </div>
+          <div class="objection-card">
+            <span class="obj-trigger">"Is there a catch / hidden cost?"</span>
+            <p><strong>Rebuttal:</strong> "Zero adverts, zero logins, zero fee. Funded entirely by community donations. You can try a puzzle in seconds at CannaGames."</p>
+          </div>
+          <button id="btnDismissObjections" class="btn btn-gold btn-block mt-2"><span class="key-badge">0</span> Close Prompter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: Daily Performance Analytics -->
+    <div id="modalAnalytics" class="modal-sheet-backdrop hidden" role="dialog" aria-modal="true">
+      <div class="modal-sheet">
+        <div class="sheet-head">
+          <h3>Performance Analytics</h3>
+          <button id="btnCloseAnalytics" class="btn-clear" aria-label="Close">&times;</button>
+        </div>
+        <div class="sheet-body">
+          <div class="stats-metric-grid">
+            <div class="stat-box">
+              <span class="stat-number" id="metricDialsToday">0</span>
+              <span class="stat-label">Calls Today</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-number" id="metricConvRate">0%</span>
+              <span class="stat-label">Contact Rate</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-number" id="metricAvgDuration">0s</span>
+              <span class="stat-label">Avg Duration</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-number" id="metricStreakDays">0</span>
+              <span class="stat-label">Day Streak</span>
+            </div>
+          </div>
+          <div class="bento-box mt-2">
+            <div class="box-caption">HOURLY CALL DISTRIBUTION</div>
+            <div id="hourlyPaceChart" class="pace-bar-container"></div>
+          </div>
+          <button id="btnDismissAnalytics" class="btn btn-gold btn-block mt-2"><span class="key-badge">0</span> Close</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ================= TEMPLATES ================= -->
-
-  <!-- 1. BENTO CONTACT CARD -->
+  <!-- BENTO TEMPLATE: LIST CARD -->
   <template id="tmpl-contact-card">
     <div class="bento-card" role="listitem" tabindex="0">
       <div class="bento-avatar"></div>
       <div class="bento-info">
         <div class="bento-header-primary"></div>
         <div class="bento-sub-person"></div>
-        <div class="bento-direct-phone"></div>
+        <div class="bento-meta-row">
+          <span class="bento-direct-phone"></span>
+          <span class="bento-tz-pill"></span>
+        </div>
       </div>
       <div class="bento-action-badge">
         <span class="status-tag"></span>
@@ -276,23 +416,24 @@
     </div>
   </template>
 
-  <!-- 2. COCKPIT (CALL & EMAIL COMMAND CENTER) -->
+  <!-- BENTO TEMPLATE: COCKPIT -->
   <template id="tmpl-cockpit">
     <div class="cockpit-layout">
-      
-      <!-- Contact Hero (Business Name as Primary Header) -->
       <div class="cockpit-hero">
         <div class="hero-avatar"></div>
         <div class="hero-details">
-          <h1 class="hero-business-title"></h1>
+          <div class="hero-business-title"></div>
           <div class="hero-person-row"></div>
+          <div class="hero-badges-row">
+            <span class="tz-badge" id="heroTzBadge"></span>
+            <span class="call-timer-badge hidden" id="heroActiveTimer">⏱ 00:00</span>
+          </div>
           <div class="hero-phone-row"></div>
           <div class="hero-email-row"></div>
         </div>
       </div>
 
-      <!-- DUAL-ACTION LAUNCHPAD: CALL & EMAIL -->
-      <div class="cockpit-dual-triggers">
+      <div class="cockpit-trio-triggers">
         <a id="btnCockpitCall" href="#" class="chunky-action-tile tile-call">
           <div class="tile-icon">📞</div>
           <div class="tile-content">
@@ -305,69 +446,69 @@
           <div class="tile-icon">✉️</div>
           <div class="tile-content">
             <div class="tile-key-badge"><span class="key-badge-lg">2</span> EMAIL</div>
-            <div class="tile-sub">Send Template</div>
+            <div class="tile-sub">Template</div>
+          </div>
+        </button>
+
+        <button id="btnCockpitSms" class="chunky-action-tile tile-sms">
+          <div class="tile-icon">💬</div>
+          <div class="tile-content">
+            <div class="tile-key-badge"><span class="key-badge-lg">3</span> SMS</div>
+            <div class="tile-sub">Dispatch</div>
           </div>
         </button>
       </div>
 
-      <!-- 4-WAY INSTANT DISPOSITION GRID (KEYS 3, 4, 5, 7) -->
       <div class="disposition-container">
         <div class="disposition-header">
-          <span>DISPOSITION (GRADUATES CONTACT OUT)</span>
+          <span>DISPOSITION (KEYS 4, 5, 6, 7)</span>
         </div>
         <div class="disposition-grid">
-          <!-- Key 3: No Answer -->
           <button id="btnDispNoAnswer" class="disp-btn disp-no-answer">
-            <span class="disp-key">3</span>
+            <span class="disp-key">4</span>
             <span class="disp-icon">🔕</span>
             <span class="disp-title">NO ANSWER</span>
             <span class="disp-desc">Stay in Fresh</span>
           </button>
 
-          <!-- Key 4: Call Back -->
           <button id="btnDispCallBack" class="disp-btn disp-callback">
-            <span class="disp-key">4</span>
+            <span class="disp-key">5</span>
             <span class="disp-icon">📅</span>
             <span class="disp-title">CALL BACK</span>
             <span class="disp-desc">Schedule</span>
           </button>
 
-          <!-- Key 5: Contacted -->
           <button id="btnDispContacted" class="disp-btn disp-contacted">
-            <span class="disp-key">5</span>
+            <span class="disp-key">6</span>
             <span class="disp-icon">⭐</span>
-            <span class="disp-title">CONTACTED</span>
-            <span class="disp-desc">Done / Closed</span>
+            <span class="disp-title">SPOKEN</span>
+            <span class="disp-desc">Contacted</span>
           </button>
 
-          <!-- Key 7: DNC -->
           <button id="btnDispDNC" class="disp-btn disp-dnc">
             <span class="disp-key">7</span>
             <span class="disp-icon">🚫</span>
             <span class="disp-title">D.N.C.</span>
-            <span class="disp-desc">Purge / Scrub</span>
+            <span class="disp-desc">Purge Lead</span>
           </button>
         </div>
       </div>
 
-      <!-- Notes Bento (Hidden completely if blank) -->
       <div id="cockpitNotesBox" class="bento-box mt-2">
         <div class="box-head-row">
-          <span class="box-caption">NOTES</span>
-          <button id="btnQuickEditNotes" class="btn-micro"><span class="key-badge">6</span> Edit</button>
+          <span class="box-caption">CALL NOTES</span>
+          <button id="btnQuickEditNotes" class="btn-micro"><span class="key-badge">8</span> Edit/Dictate</button>
         </div>
         <p class="cockpit-notes-text"></p>
       </div>
 
-      <!-- Activity History -->
       <div id="cockpitHistoryBox" class="bento-box mt-2">
         <div class="box-head-row">
-          <span class="box-caption">ACTIVITY HISTORY</span>
+          <span class="box-caption">ACTIVITY AUDIT</span>
           <span class="cockpit-log-count"></span>
         </div>
         <div class="cockpit-history-feed"></div>
       </div>
-
     </div>
   </template>
 
