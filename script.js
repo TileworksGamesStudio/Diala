@@ -15,26 +15,19 @@
 
   // --- 1. DEFAULT DATA & TEMPLATES ---
   const DEFAULT_TEMPLATES = {
-    intro: {
-      id: 'intro',
+    hospitality_demo: {
+      id: 'hospitality_demo',
       type: 'email',
-      title: 'Introduction',
-      subject: 'Quick resource for {company} | CannaGames',
-      body: '{greeting} {first_name|there},\n\nThank you for connecting with me earlier. Christian here, founder of Tileworks Studio.\n\nWe built CannaGames—a 100% free web app that improves staff cannabis knowledge through interactive puzzles. Completely ad-free with zero data collection.\n\nExplore it directly here:\nhttps://tileworksgamesstudio.github.io/CannaGames-Home/\n\nOptional donations to keep it ad-free:\nhttps://buy.stripe.com/14AbJ0czm3Ct3ARdPgefC0U\n\nKind regards,\n\nChristian John\nFounder, Tileworks Studio'
-    },
-    followup: {
-      id: 'followup',
-      type: 'email',
-      title: 'Post-Call Follow-Up',
-      subject: 'Great speaking with you | {company}',
-      body: '{greeting} {first_name|there},\n\nGreat speaking just now. As promised, following up with details for {company}.\n\nLet me know if you have questions.\n\nBest regards,\nChristian John'
+      title: 'Interactive Demonstration Follow-Up',
+      subject: 'Interactive training demonstration | {company}',
+      body: 'Hello again [First Name],\n\nThank you again for your time today. It was a real pleasure speaking with you.\n\nAs discussed, I’ve included a link to our interactive demonstration app so you can explore the training resource for yourself:\n\n**Try the demonstration here:**  \nhttps://tileworksgamesstudio.github.io/86/\n\nTileworks Studio develops engaging, puzzle-based training activities designed to help hospitality staff build their knowledge in an enjoyable and memorable way. By helping your team develop greater confidence and consistency, these resources can support a higher standard of customer service and strengthen your brand’s reputation.\n\nI’d love to hear what you think of the demonstration. If you feel this could be a valuable addition to your team’s training, we could arrange a brief follow-up call to answer any questions and learn more about your current training resources and needs.\n\nSpeak soon,\n\nChristian J.  \nFounder, Tileworks Studio'
     },
     quick_sms: {
       id: 'quick_sms',
       type: 'sms',
       title: 'Quick SMS Follow-Up',
       subject: 'SMS',
-      body: '{greeting} {first_name|there}! Just tried you from Tileworks regarding free cannabis puzzle training for {company}. Test here: https://tileworksgamesstudio.github.io/CannaGames-Home/'
+      body: 'Hello again [First Name]! Following up from Tileworks Studio regarding our interactive hospitality training demo for {company}: https://tileworksgamesstudio.github.io/86/'
     }
   };
 
@@ -190,7 +183,7 @@
     focusedCardIndex: 0,
     activeScreenId: 'screenContacts',
     emailTemplates: { ...DEFAULT_TEMPLATES },
-    activeTemplateId: 'intro',
+    activeTemplateId: 'hospitality_demo',
     pendingCallbackContact: null,
     activeCallSession: null,
     historyFilterAction: 'all',
@@ -252,22 +245,52 @@
   function resolveTokens(templateStr, contact) {
     if (!templateStr) return '';
     const firstName = contact.name ? contact.name.trim().split(' ')[0] : '';
-    const comp = contact.company || '';
-    const phone = contact.phone || '';
-    const email = contact.email || '';
+    const fullName = contact.name ? contact.name.trim() : '';
+    const comp = contact.company ? contact.company.trim() : '';
+    const phone = contact.phone ? contact.phone.trim() : '';
+    const email = contact.email ? contact.email.trim() : '';
+    const jobTitle = contact.job_title ? contact.job_title.trim() : '';
+    const notes = contact.notes ? contact.notes.trim() : '';
 
     const now = new Date();
-    const tzInfo = getContactTimezone(contact.phone);
     const greeting = now.getHours() < 12 ? 'Good morning' : 'Good afternoon';
 
     return templateStr
-      .replace(/{greeting}/gi, greeting)
-      .replace(/{company}/gi, comp)
-      .replace(/{phone}/gi, phone)
-      .replace(/{email}/gi, email)
-      .replace(/{my_name}/gi, 'Christian John')
-      .replace(/{first_name\|?([^}]*)}/gi, (match, fallback) => firstName || fallback || 'there')
-      .replace(/{name\|?([^}]*)}/gi, (match, fallback) => contact.name || fallback || 'there');
+      // Bracket token variants: [First Name], [Company], [Job Title], etc.
+      .replace(/\[first[\s_]?name\]/gi, firstName || 'there')
+      .replace(/\[name\]/gi, fullName || 'there')
+      .replace(/\[full[\s_]?name\]/gi, fullName || 'there')
+      .replace(/\[company\]/gi, comp)
+      .replace(/\[business\]/gi, comp)
+      .replace(/\[phone\]/gi, phone)
+      .replace(/\[telephone\]/gi, phone)
+      .replace(/\[email\]/gi, email)
+      .replace(/\[job[\s_]?title\]/gi, jobTitle)
+      .replace(/\[role\]/gi, jobTitle)
+      .replace(/\[title\]/gi, jobTitle)
+      .replace(/\[notes\]/gi, notes)
+      .replace(/\[memo\]/gi, notes)
+      .replace(/\[greeting\]/gi, greeting)
+      .replace(/\[my[\s_]?name\]/gi, 'Christian J.')
+
+      // Dynamic fallbacks: {first_name|fallback}, {company|fallback}
+      .replace(/\{first_name\|?([^}]*)\}/gi, (match, fallback) => firstName || fallback || 'there')
+      .replace(/\{name\|?([^}]*)\}/gi, (match, fallback) => fullName || fallback || 'there')
+      .replace(/\{company\|?([^}]*)\}/gi, (match, fallback) => comp || fallback || '')
+      .replace(/\{job_title\|?([^}]*)\}/gi, (match, fallback) => jobTitle || fallback || '')
+      .replace(/\{notes\|?([^}]*)\}/gi, (match, fallback) => notes || fallback || '')
+
+      // Standard curly bracket variants: {first_name}, {company}, etc.
+      .replace(/\{first_name\}/gi, firstName || 'there')
+      .replace(/\{name\}/gi, fullName || 'there')
+      .replace(/\{company\}/gi, comp)
+      .replace(/\{phone\}/gi, phone)
+      .replace(/\{email\}/gi, email)
+      .replace(/\{job_title\}/gi, jobTitle)
+      .replace(/\{role\}/gi, jobTitle)
+      .replace(/\{notes\}/gi, notes)
+      .replace(/\{greeting\}/gi, greeting)
+      .replace(/\{my_name\}/gi, 'Christian J.');
   }
 
   function cleanPhoneForDial(str) {
@@ -365,7 +388,11 @@
         if (e.target.result && e.target.result.val) {
           state.settings = { ...state.settings, ...e.target.result.val.settings };
           if (e.target.result.val.templates) {
-            state.emailTemplates = { ...state.emailTemplates, ...e.target.result.val.templates };
+            const loadedTemplates = e.target.result.val.templates;
+            // Purge outdated drafts so only the requested email template is active
+            delete loadedTemplates.intro;
+            delete loadedTemplates.followup;
+            state.emailTemplates = { ...DEFAULT_TEMPLATES, ...loadedTemplates };
           }
         }
         applyDisplayDensity(state.settings.textDensity);
@@ -536,7 +563,6 @@
     if (state.t9Timeout) clearTimeout(state.t9Timeout);
     state.t9Buffer += key;
 
-    // Filter leads matching prefixes
     const matchingIdx = state.filteredContacts.findIndex(c => {
       const name = (c.company || c.name || '').toLowerCase();
       return name.startsWith(T9_MAP[key][0]) || name.startsWith(T9_MAP[key][1]) || name.startsWith(T9_MAP[key][2]);
@@ -958,7 +984,7 @@
   }
 
   function updateCommDraftFields(contact, templateId) {
-    const t = state.emailTemplates[templateId] || state.emailTemplates.intro;
+    const t = state.emailTemplates[templateId] || state.emailTemplates.hospitality_demo || Object.values(state.emailTemplates)[0];
     document.getElementById('draftSubject').value = resolveTokens(t.subject, contact);
     document.getElementById('draftBody').value = resolveTokens(t.body, contact);
   }
@@ -1304,7 +1330,6 @@
           case '#': e.preventDefault(); document.getElementById('fileCsvInput').click(); break;
           case '*': e.preventDefault(); document.getElementById('searchInput').focus(); break;
           default:
-            // T9 Multi-Tap Routing
             if (['2','3','4','5','6','7','8','9'].includes(e.key)) {
               handleT9Input(e.key);
             }
@@ -1688,7 +1713,7 @@
     });
 
     const loadTmplFields = (id) => {
-      const t = state.emailTemplates[id] || state.emailTemplates.intro;
+      const t = state.emailTemplates[id] || state.emailTemplates.hospitality_demo || Object.values(state.emailTemplates)[0];
       document.getElementById('templateSubject').value = t.subject || '';
       document.getElementById('templateBody').value = t.body || '';
     };
